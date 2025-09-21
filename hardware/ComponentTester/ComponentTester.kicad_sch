@@ -3077,7 +3077,7 @@
 		)
 		(uuid "ab99e101-9586-403b-9f6a-0bf46b9e067f")
 	)
-	(text "D0-D5: data\nADC6,ADC7: data\nWR|RD|CS|VIN: control\nCLK: button\nRES: reset\nVIN-A15: indicator"
+	(text "D0-D7: data\nADC6,ADC7: data\nWR|RD|CS|VIN: control\nCLK: button\nRES: reset <-> pull low\nVIN-A15: indicator"
 		(exclude_from_sim no)
 		(at 209.296 48.006 0)
 		(effects
@@ -5926,7 +5926,6 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "3dee613b-8d1a-4584-97aa-66dbc1f0d5da")
 		(property "Reference" "#PWR08"
 			(at 151.13 129.54 0)
