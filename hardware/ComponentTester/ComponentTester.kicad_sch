@@ -2013,204 +2013,6 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "EasyEDA:CSTNE16M0V530000R0"
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "X"
-				(at 0 5.08 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "CSTNE16M0V530000R0"
-				(at 0 -10.16 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" "EasyEDA:OSC-SMD_3P-L3.2-W1.3-P1.2-L"
-				(at 0 -12.7 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" "https://lcsc.com/product-detail/Others_Murata-Electronics-CSTNE16M0V530000R0_C341521.html"
-				(at 0 -15.24 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" ""
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "LCSC Part" "C341521"
-				(at 0 -17.78 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "CSTNE16M0V530000R0_0_1"
-				(polyline
-					(pts
-						(xy -1.27 1.78) (xy -1.27 -1.78)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy -1.27 1.02) (xy -1.27 -1.02)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy -0.76 1.78) (xy 0.76 1.78)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy -0.76 -1.78) (xy -0.76 1.78) (xy 0.76 1.78) (xy 0.76 -1.78) (xy -0.76 -1.78)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type background)
-					)
-				)
-				(polyline
-					(pts
-						(xy 0.76 1.78) (xy 0.76 -1.78) (xy -0.76 -1.78) (xy -0.76 1.78)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy 1.27 1.78) (xy 1.27 -1.78)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy 1.27 1.02) (xy 1.27 -1.02)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin input line
-					(at -5.08 0 0)
-					(length 3.81)
-					(name "OSC2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 0 -5.08 90)
-					(length 3.048)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 5.08 0 180)
-					(length 3.81)
-					(name "OSC1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
 		(symbol "MCU_Microchip_ATmega:ATmega328P-A"
 			(exclude_from_sim no)
 			(in_bom yes)
@@ -3421,10 +3223,6 @@
 		(uuid "3b460854-733c-4ee0-ab6d-bfc6424512f0")
 	)
 	(no_connect
-		(at 209.55 82.55)
-		(uuid "5a0db51f-cbda-475c-8e40-e25d0617fee4")
-	)
-	(no_connect
 		(at 209.55 87.63)
 		(uuid "6fa80206-d78f-4b30-a7f5-7805202ce19b")
 	)
@@ -3453,16 +3251,22 @@
 		(uuid "a54a9762-ccb6-4f36-b05d-a307027a2850")
 	)
 	(no_connect
-		(at 209.55 80.01)
-		(uuid "d434e911-6941-4a41-a660-16ed2a95e247")
-	)
-	(no_connect
 		(at 149.86 132.08)
 		(uuid "dc44b039-0ac2-48db-a2fb-912f7e9f4295")
 	)
 	(no_connect
 		(at 209.55 92.71)
 		(uuid "f54dbd63-b947-4a94-88fe-2deda16a3850")
+	)
+	(wire
+		(pts
+			(xy 109.22 99.06) (xy 88.9 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "018f3204-a9f2-4e06-bde8-beccbff1555f")
 	)
 	(wire
 		(pts
@@ -3516,16 +3320,6 @@
 	)
 	(wire
 		(pts
-			(xy 118.11 96.52) (xy 88.9 96.52)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "10ba9f48-650a-4914-b17a-c2074e826957")
-	)
-	(wire
-		(pts
 			(xy 209.55 100.33) (xy 222.25 100.33)
 		)
 		(stroke
@@ -3563,16 +3357,6 @@
 			(type default)
 		)
 		(uuid "1872d4ff-b9d5-4f03-8924-6b235d178776")
-	)
-	(wire
-		(pts
-			(xy 118.11 99.06) (xy 88.9 99.06)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "18d833da-90fc-4222-a1c7-dd99e419a489")
 	)
 	(wire
 		(pts
@@ -3746,6 +3530,16 @@
 	)
 	(wire
 		(pts
+			(xy 109.22 59.69) (xy 109.22 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3ba40d83-9ebd-4300-bdad-a2a639ec3662")
+	)
+	(wire
+		(pts
 			(xy 48.26 81.28) (xy 48.26 72.39)
 		)
 		(stroke
@@ -3883,16 +3677,6 @@
 			(type default)
 		)
 		(uuid "52b53be2-977e-4264-b5ed-70a6961880a5")
-	)
-	(wire
-		(pts
-			(xy 118.11 92.71) (xy 118.11 96.52)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "54e10bb2-4aca-4da2-93c0-1ed303ad4d5f")
 	)
 	(wire
 		(pts
@@ -4146,6 +3930,16 @@
 	)
 	(wire
 		(pts
+			(xy 106.68 59.69) (xy 106.68 96.52)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7d614ec0-835d-46cf-a4a1-625189dfca3e")
+	)
+	(wire
+		(pts
 			(xy 49.53 88.9) (xy 58.42 88.9)
 		)
 		(stroke
@@ -4186,16 +3980,6 @@
 	)
 	(wire
 		(pts
-			(xy 121.92 92.71) (xy 118.11 92.71)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "87eabef5-c1e4-437a-a314-5b597ef85d99")
-	)
-	(wire
-		(pts
 			(xy 88.9 124.46) (xy 106.68 124.46)
 		)
 		(stroke
@@ -4203,6 +3987,16 @@
 			(type default)
 		)
 		(uuid "8ae769ad-37c5-4cc8-bd49-95405b30d8e9")
+	)
+	(wire
+		(pts
+			(xy 106.68 96.52) (xy 88.9 96.52)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8df18b2c-14f4-49d5-b0a2-667100e8d97f")
 	)
 	(wire
 		(pts
@@ -4336,16 +4130,6 @@
 	)
 	(wire
 		(pts
-			(xy 118.11 99.06) (xy 118.11 102.87)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a0fcdce6-54c2-40d1-882c-def92fc8a8c3")
-	)
-	(wire
-		(pts
 			(xy 93.98 111.76) (xy 104.14 111.76)
 		)
 		(stroke
@@ -4363,16 +4147,6 @@
 			(type default)
 		)
 		(uuid "a3b44142-949e-426e-968a-00ee3fabc2b1")
-	)
-	(wire
-		(pts
-			(xy 118.11 102.87) (xy 121.92 102.87)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a5040256-923f-4107-9847-d8a9fd8cf9ee")
 	)
 	(wire
 		(pts
@@ -5135,12 +4909,12 @@
 		(uuid "37322bd8-78a1-4f61-86ca-403d396150ee")
 	)
 	(label "CARD_D7"
-		(at 49.53 88.9 0)
+		(at 109.22 59.69 270)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
 		(uuid "3947c4bb-60f6-4f41-a5f4-b9e0de8c6f4d")
 	)
@@ -5243,6 +5017,16 @@
 			(justify right bottom)
 		)
 		(uuid "5fdf43ac-1558-48b7-a411-7a2770154420")
+	)
+	(label "CARD_A0"
+		(at 49.53 86.36 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "65a95687-f1f9-422b-8eea-4669ea7227c1")
 	)
 	(label "CARD_D0"
 		(at 91.44 59.69 270)
@@ -5393,6 +5177,16 @@
 			(justify left bottom)
 		)
 		(uuid "96ca2723-342b-4c34-8228-f8e62d6a33db")
+	)
+	(label "CARD_A1"
+		(at 49.53 88.9 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "98c9e58c-893d-470b-a599-a11d7b1f277b")
 	)
 	(label "2"
 		(at 170.18 115.57 180)
@@ -5615,12 +5409,12 @@
 		(uuid "f7a1722d-2450-4775-a53b-435282a54de0")
 	)
 	(label "CARD_D6"
-		(at 49.53 86.36 0)
+		(at 106.68 59.69 270)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
 		(uuid "f9077c31-1219-47e4-af35-8c454ec94145")
 	)
@@ -5633,85 +5427,6 @@
 			(justify left bottom)
 		)
 		(uuid "fc693752-9fa9-4692-a104-eb6e69114833")
-	)
-	(symbol
-		(lib_id "EasyEDA:CSTNE16M0V530000R0")
-		(at 121.92 97.79 90)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "00b34805-e200-4a14-a6a1-cde464782875")
-		(property "Reference" "X1"
-			(at 115.57 97.79 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "16MHz"
-			(at 125.984 94.742 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "EasyEDA:OSC-SMD_3P-L3.2-W1.3-P1.2-L"
-			(at 134.62 97.79 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://lcsc.com/product-detail/Others_Murata-Electronics-CSTNE16M0V530000R0_C341521.html"
-			(at 137.16 97.79 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 121.92 97.79 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part" "C341521"
-			(at 139.7 97.79 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "2"
-			(uuid "f7903d5b-46d5-4ffd-b52c-95a5417a295f")
-		)
-		(pin "3"
-			(uuid "a74beac7-f4d7-49c5-b837-b85edf103466")
-		)
-		(pin "1"
-			(uuid "da7e060a-7a53-4e75-b1b8-9d7c73033541")
-		)
-		(instances
-			(project ""
-				(path "/80bd7774-bbdd-4a53-bd07-874de5be49cb"
-					(reference "X1")
-					(unit 1)
-				)
-			)
-		)
 	)
 	(symbol
 		(lib_id "power:GND")
@@ -7443,71 +7158,6 @@
 			(project "ComponentTester"
 				(path "/80bd7774-bbdd-4a53-bd07-874de5be49cb"
 					(reference "R7")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:GND")
-		(at 127 97.79 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "b4055319-16aa-4a4f-b76d-f2a9ad9e0495")
-		(property "Reference" "#PWR012"
-			(at 127 104.14 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "GND"
-			(at 124.968 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 127 97.79 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 127 97.79 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 127 97.79 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "3ace6f16-952c-4674-b90b-b9073944f470")
-		)
-		(instances
-			(project "ComponentTester"
-				(path "/80bd7774-bbdd-4a53-bd07-874de5be49cb"
-					(reference "#PWR012")
 					(unit 1)
 				)
 			)
