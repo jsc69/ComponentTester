@@ -1,0 +1,55 @@
+1. Low Fuse (LFUSE)
+| Bit | Name     | Wert = 0 Bedeutung                | Wert = 1 Bedeutung              |
+| --- | -------- | --------------------------------- | ------------------------------- |
+| 7   | RSTDISBL | Reset Disabled                    | Reset Enabled                   |
+| 6   | DWEN     | DebugWire Enable                  | DebugWire Disabled              |
+| 5   | SPIEN    | SPI Programming Enable            | SPI Programming Disabled        |
+| 4   | WDTON    | Watchdog Timer Always On          | Watchdog Timer Normal           |
+| 3   | EESAVE   | EEPROM beim Chip-Löschen behalten | EEPROM wird gelöscht            |
+| 2   | BOOTSZ1  | Bootloader Größe Bit 1            | Bootloader Größe Bit 1          |
+| 1   | BOOTSZ0  | Bootloader Größe Bit 0            | Bootloader Größe Bit 0          |
+| 0   | BOOTRST  | Boot Reset Vektor = Bootloader    | Boot Reset Vektor = Application |
+Hinweis: Die Kombination der Bits CKSEL[3:0] + SUT[1:0] legt die Taktquelle und Start-Up-Zeit fest.
+Beispiel für 16 MHz externen Quarz: LFUSE = 0xFF
+
+2. High Fuse (HFUSE)
+| Bit | Name     | Wert = 0 Bedeutung                | Wert = 1 Bedeutung              |
+| --- | -------- | --------------------------------- | ------------------------------- |
+| 7   | RSTDISBL | Reset Disabled                    | Reset Enabled                   |
+| 6   | DWEN     | DebugWire Enable                  | DebugWire Disabled              |
+| 5   | SPIEN    | SPI Programming Enable            | SPI Programming Disabled        |
+| 4   | WDTON    | Watchdog Timer Always On          | Watchdog Timer Normal           |
+| 3   | EESAVE   | EEPROM beim Chip-Löschen behalten | EEPROM wird gelöscht            |
+| 2   | BOOTSZ1  | Bootloader Größe Bit 1            | Bootloader Größe Bit 1          |
+| 1   | BOOTSZ0  | Bootloader Größe Bit 0            | Bootloader Größe Bit 0          |
+| 0   | BOOTRST  | Boot Reset Vektor = Bootloader    | Boot Reset Vektor = Application |
+
+Beispiele Bootloadergröße:
+| BOOTSZ1:BOOTSZ0 | Bootloader-Größe |
+| --------------- | ---------------- |
+| 00              | 4096 Bytes       |
+| 01              | 2048 Bytes       |
+| 10              | 1024 Bytes       |
+| 11              | 512 Bytes        |
+
+3. Extended Fuse (EFUSE)
+| Bit | Name      | Wert = 0 Bedeutung       | Wert = 1 Bedeutung |
+| --- | --------- | ------------------------ | ------------------ |
+| 7-3 | -         | Nicht verwendet          | Nicht verwendet    |
+| 2   | BODLEVEL2 | Brown-Out Detector Level | Level Bit          |
+| 1   | BODLEVEL1 | Brown-Out Detector Level | Level Bit          |
+| 0   | BODLEVEL0 | Brown-Out Detector Level | Level Bit          |
+
+Brown-Out Levels:
+| BODLEVEL2:0 | BOD Voltage |
+| ----------- | ----------- |
+| 000         | 4.3 V       |
+| 001         | 4.0 V       |
+| 010         | 3.8 V       |
+| 011         | 2.7 V       |
+| 100-111     | Reserve     |
+
+Tipps:
+Fuse-Werte sind immer in Hex angegeben, z.B. 0xFF, 0xDE.
+Ein gesetztes Bit = 0 in der Dokumentation, ein nicht gesetztes = 1.
+Falsche Fuses können den Chip unprogrammierbar machen, also Vorsicht!

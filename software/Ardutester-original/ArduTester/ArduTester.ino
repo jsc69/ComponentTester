@@ -75,7 +75,7 @@ char foo;
 #define USER_WAIT             3000               //Nexpage Timeout
 
 //Check features
-#if not defined(__AVR_ATmega328P__)
+#if not defined(__AVR_ATmega328P__) && not defined(__AVR_ATmega328PB__)
     #error Sorry, this program works only on Arduino Uno 
 #endif
 #if defined(LCD_PRINT) && defined(DEBUG_PRINT)
