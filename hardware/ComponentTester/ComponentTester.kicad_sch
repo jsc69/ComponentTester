@@ -2217,7 +2217,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "MCU_Microchip_ATmega:ATmega328P-A"
+		(symbol "MCU_Microchip_ATmega:ATmega328PB-A"
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
@@ -2230,7 +2230,7 @@
 					(justify left bottom)
 				)
 			)
-			(property "Value" "ATmega328P-A"
+			(property "Value" "ATmega328PB-A"
 				(at 2.54 -36.83 0)
 				(effects
 					(font
@@ -2249,7 +2249,7 @@
 					(hide yes)
 				)
 			)
-			(property "Datasheet" "http://ww1.microchip.com/downloads/en/DeviceDoc/ATmega328_P%20AVR%20MCU%20with%20picoPower%20Technology%20Data%20Sheet%2040001984A.pdf"
+			(property "Datasheet" "http://ww1.microchip.com/downloads/en/DeviceDoc/40001906C.pdf"
 				(at 0 0 0)
 				(effects
 					(font
@@ -2267,7 +2267,7 @@
 					(hide yes)
 				)
 			)
-			(property "ki_keywords" "AVR 8bit Microcontroller MegaAVR PicoPower"
+			(property "ki_keywords" "AVR 8bit Microcontroller MegaAVR"
 				(at 0 0 0)
 				(effects
 					(font
@@ -2285,7 +2285,7 @@
 					(hide yes)
 				)
 			)
-			(symbol "ATmega328P-A_0_1"
+			(symbol "ATmega328PB-A_0_1"
 				(rectangle
 					(start -12.7 -35.56)
 					(end 12.7 35.56)
@@ -2298,7 +2298,7 @@
 					)
 				)
 			)
-			(symbol "ATmega328P-A_1_1"
+			(symbol "ATmega328PB-A_1_1"
 				(pin passive line
 					(at -15.24 30.48 0)
 					(length 2.54)
@@ -2317,10 +2317,46 @@
 						)
 					)
 				)
-				(pin input line
-					(at -15.24 25.4 0)
+				(pin bidirectional line
+					(at -15.24 -12.7 0)
 					(length 2.54)
-					(name "ADC6"
+					(name "PE0"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at -15.24 -15.24 0)
+					(length 2.54)
+					(name "PE1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at -15.24 -17.78 0)
+					(length 2.54)
+					(name "PE2"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -2335,10 +2371,10 @@
 						)
 					)
 				)
-				(pin input line
-					(at -15.24 22.86 0)
+				(pin bidirectional line
+					(at -15.24 -20.32 0)
 					(length 2.54)
-					(name "ADC7"
+					(name "PE3"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -2372,25 +2408,6 @@
 					)
 				)
 				(pin passive line
-					(at 0 38.1 270)
-					(length 2.54)
-					(hide yes)
-					(name "VCC"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "6"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin passive line
 					(at 0 -38.1 90)
 					(length 2.54)
 					(hide yes)
@@ -2412,25 +2429,6 @@
 				(pin power_in line
 					(at 0 -38.1 90)
 					(length 2.54)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin passive line
-					(at 0 -38.1 90)
-					(length 2.54)
-					(hide yes)
 					(name "GND"
 						(effects
 							(font
@@ -3281,7 +3279,7 @@
 		)
 		(uuid "ab99e101-9586-403b-9f6a-0bf46b9e067f")
 	)
-	(text "D0-D7: data\nADC6,ADC7: data\nWR|RD|CS|VIN: control\nCLK: button\nRES: reset <-> pull low\nVIN-A15: indicator"
+	(text "D0-D7: data\nA0-A3: data\nWR|RD|CS|VIN: control\nCLK: button\nRES: reset <-> pull low\nVIN-A15: indicator"
 		(exclude_from_sim no)
 		(at 209.296 48.006 0)
 		(effects
@@ -3427,20 +3425,12 @@
 		(uuid "07bd4a40-0fe0-4eb3-854c-a33d66d248e4")
 	)
 	(no_connect
-		(at 209.55 85.09)
-		(uuid "268242fa-7262-4e27-be4f-5b9236bda873")
-	)
-	(no_connect
 		(at 209.55 115.57)
 		(uuid "3794ab00-4ef4-4f16-a776-ac92c312058b")
 	)
 	(no_connect
 		(at 209.55 105.41)
 		(uuid "3b460854-733c-4ee0-ab6d-bfc6424512f0")
-	)
-	(no_connect
-		(at 209.55 87.63)
-		(uuid "6fa80206-d78f-4b30-a7f5-7805202ce19b")
 	)
 	(no_connect
 		(at 209.55 97.79)
@@ -3473,6 +3463,16 @@
 	(no_connect
 		(at 209.55 92.71)
 		(uuid "f54dbd63-b947-4a94-88fe-2deda16a3850")
+	)
+	(wire
+		(pts
+			(xy 49.53 132.08) (xy 58.42 132.08)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "01509599-91a5-4e1c-9265-49f302aee560")
 	)
 	(wire
 		(pts
@@ -3976,7 +3976,7 @@
 	)
 	(wire
 		(pts
-			(xy 49.53 86.36) (xy 58.42 86.36)
+			(xy 49.53 124.46) (xy 58.42 124.46)
 		)
 		(stroke
 			(width 0)
@@ -4156,7 +4156,7 @@
 	)
 	(wire
 		(pts
-			(xy 49.53 88.9) (xy 58.42 88.9)
+			(xy 49.53 127) (xy 58.42 127)
 		)
 		(stroke
 			(width 0)
@@ -4563,6 +4563,16 @@
 			(type default)
 		)
 		(uuid "c0bd5162-fb40-4949-a40b-0bb4bd777573")
+	)
+	(wire
+		(pts
+			(xy 49.53 129.54) (xy 58.42 129.54)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c14c169b-0e03-4b70-9c30-c3d351c03f64")
 	)
 	(wire
 		(pts
@@ -5265,7 +5275,7 @@
 		(uuid "5fdf43ac-1558-48b7-a411-7a2770154420")
 	)
 	(label "CARD_A0"
-		(at 49.53 86.36 0)
+		(at 49.53 124.46 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5313,6 +5323,16 @@
 			(justify right bottom)
 		)
 		(uuid "8299c3d8-5423-4970-b9ac-77b86e2d733b")
+	)
+	(label "CARD_A2"
+		(at 49.53 129.54 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "836c7515-776c-4aa6-8326-7d1eaef5d1c7")
 	)
 	(label "CARD_CLK"
 		(at 93.98 156.21 90)
@@ -5435,7 +5455,7 @@
 		(uuid "96ca2723-342b-4c34-8228-f8e62d6a33db")
 	)
 	(label "CARD_A1"
-		(at 49.53 88.9 0)
+		(at 49.53 127 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5463,6 +5483,16 @@
 			(justify left bottom)
 		)
 		(uuid "9f347d95-75b3-41cc-a3c5-0ad9076ba626")
+	)
+	(label "CARD_A3"
+		(at 49.53 132.08 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "a2d52f74-d6ea-45ed-a1c9-f4790cc454cc")
 	)
 	(label "3"
 		(at 182.88 115.57 180)
@@ -6792,166 +6822,6 @@
 		)
 	)
 	(symbol
-		(lib_id "MCU_Microchip_ATmega:ATmega328P-A")
-		(at 73.66 111.76 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "6ddf96d7-a0f3-4690-9d01-2d47cb117a6d")
-		(property "Reference" "U1"
-			(at 79.248 73.914 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "ATmega328P-A"
-			(at 72.136 113.03 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Package_QFP:TQFP-32_7x7mm_P0.8mm"
-			(at 73.66 111.76 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://ww1.microchip.com/downloads/aemDocuments/documents/MCU08/ProductDocuments/DataSheets/ATmega48A-PA-88A-PA-168A-PA-328-P-DS-DS40002061B.pdf"
-			(at 73.66 111.76 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "20MHz, 32kB Flash, 2kB SRAM, 1kB EEPROM, TQFP-32"
-			(at 73.66 111.76 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "10"
-			(uuid "0490a34d-b5f1-420b-8b83-ed9546572931")
-		)
-		(pin "30"
-			(uuid "72f1e0c3-2638-413c-bc0b-601ba0ce45fd")
-		)
-		(pin "13"
-			(uuid "f8de7520-00e6-4f6e-b0b3-50ddf6ade936")
-		)
-		(pin "32"
-			(uuid "05fd8085-e77b-4cba-870b-11ac328cd01a")
-		)
-		(pin "22"
-			(uuid "b2bac247-b2d3-492b-8b7e-bc1be657cfd0")
-		)
-		(pin "23"
-			(uuid "611738b5-dbdb-499a-be72-ee37f478f68d")
-		)
-		(pin "27"
-			(uuid "5c14eef0-381d-4ee7-9493-3bf9c22dea51")
-		)
-		(pin "28"
-			(uuid "d2500c8f-33a3-459c-b026-95cead48cf6a")
-		)
-		(pin "6"
-			(uuid "e9c2646c-be21-4ba7-8c7c-299118201957")
-		)
-		(pin "29"
-			(uuid "783add47-ee51-4181-ab0d-2f93dc9fa46e")
-		)
-		(pin "19"
-			(uuid "9bb9f4d9-9cde-426c-9601-c03ee9f20809")
-		)
-		(pin "4"
-			(uuid "fd91de1e-5c31-40fc-bd8f-80b658bc73c9")
-		)
-		(pin "31"
-			(uuid "dd33e172-26b9-428d-8045-e4a0662880f8")
-		)
-		(pin "21"
-			(uuid "ec5c32a3-f0da-4bc6-b2f1-b62d97c9ebf3")
-		)
-		(pin "3"
-			(uuid "08ffe321-3147-451b-9642-7a2c27703880")
-		)
-		(pin "18"
-			(uuid "3cb54592-f79f-47a5-bf2d-beb503b0c189")
-		)
-		(pin "20"
-			(uuid "38cf2523-6c63-4c79-b1cb-b73ba7930ce7")
-		)
-		(pin "26"
-			(uuid "1d776edb-12a4-4ec1-bf84-38e45c22398f")
-		)
-		(pin "2"
-			(uuid "b48f5ea7-9851-466c-a4a9-544a2369269d")
-		)
-		(pin "1"
-			(uuid "06f5d41a-2733-4dc1-81c3-155f135233a1")
-		)
-		(pin "17"
-			(uuid "a7907014-abdf-4a4f-bcac-c9271dff275f")
-		)
-		(pin "25"
-			(uuid "b52cc895-6f36-4dd6-a621-1e149d893d73")
-		)
-		(pin "14"
-			(uuid "add9ffd3-794e-46d5-bbf4-59b95852bbf8")
-		)
-		(pin "24"
-			(uuid "08dfc535-cfc7-41db-9989-7440fe1dd647")
-		)
-		(pin "11"
-			(uuid "302dabb8-3a0e-496f-aa98-e11ac3dadc66")
-		)
-		(pin "12"
-			(uuid "74c806bc-f64c-41cc-9e07-c520eee54070")
-		)
-		(pin "16"
-			(uuid "66938cbe-ff70-4b10-8f9b-81f6c27d8f19")
-		)
-		(pin "9"
-			(uuid "47ce107c-240a-4152-8e8c-ec1a3c863521")
-		)
-		(pin "5"
-			(uuid "847696ed-6a2f-441e-992b-e79f0572fd01")
-		)
-		(pin "8"
-			(uuid "33fbcd69-545a-4f13-bd27-266ec25362a8")
-		)
-		(pin "15"
-			(uuid "0b79c919-0b06-4cd0-83ee-1a484577664c")
-		)
-		(pin "7"
-			(uuid "a2a81071-f4f5-4b88-b657-0a594eefe53e")
-		)
-		(instances
-			(project ""
-				(path "/80bd7774-bbdd-4a53-bd07-874de5be49cb"
-					(reference "U1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Connector:Conn_01x06_Socket")
 		(at 158.75 129.54 0)
 		(mirror x)
@@ -7321,6 +7191,166 @@
 			(project ""
 				(path "/80bd7774-bbdd-4a53-bd07-874de5be49cb"
 					(reference "J4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "MCU_Microchip_ATmega:ATmega328PB-A")
+		(at 73.66 111.76 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "99aef8ff-8cd7-44c6-a588-e8fa51bdfb80")
+		(property "Reference" "U1"
+			(at 83.058 74.422 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "ATmega328PB-A"
+			(at 73.406 120.396 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Package_QFP:TQFP-32_7x7mm_P0.8mm"
+			(at 73.66 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(italic yes)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "http://ww1.microchip.com/downloads/en/DeviceDoc/40001906C.pdf"
+			(at 73.66 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "20MHz, 32kB Flash, 2kB SRAM, 1kB EEPROM, TQFP-32"
+			(at 73.66 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "11"
+			(uuid "6d1f75a4-d65f-4ab9-9f71-51284b0b2b6a")
+		)
+		(pin "12"
+			(uuid "b75edb7e-3857-4779-af50-575bfa538ca7")
+		)
+		(pin "23"
+			(uuid "3580d83b-ca92-4117-8ac6-92aa568ca571")
+		)
+		(pin "22"
+			(uuid "58867c66-e065-4236-b7d1-8a69645d71e7")
+		)
+		(pin "16"
+			(uuid "be5ae1fc-a838-4b27-9eb4-fc506344edab")
+		)
+		(pin "4"
+			(uuid "09f31832-f96b-410b-be7a-dc8e5b57046c")
+		)
+		(pin "21"
+			(uuid "0fb8da09-461e-4718-b89b-f186484df8ed")
+		)
+		(pin "7"
+			(uuid "18e87443-299f-45b2-8851-87574f747993")
+		)
+		(pin "25"
+			(uuid "78be6b85-1693-4414-b9a0-4c39d1f7cde5")
+		)
+		(pin "31"
+			(uuid "c4ac463e-877e-49f3-b01a-4369b4beac56")
+		)
+		(pin "15"
+			(uuid "3d9d5584-d4d5-46f1-8bcb-c9b59643d70d")
+		)
+		(pin "29"
+			(uuid "25321fcd-5eb9-42fc-a3dc-7c667c6c3380")
+		)
+		(pin "14"
+			(uuid "b903a478-620a-4f2e-bf8b-86d1c03e42ae")
+		)
+		(pin "1"
+			(uuid "47140fcd-0a45-41fd-8dba-8ef1ea35dc52")
+		)
+		(pin "2"
+			(uuid "0dcb7dbd-cb91-4932-9bdb-73415d2cd90b")
+		)
+		(pin "20"
+			(uuid "d3d8188d-5c8f-499f-89b8-aaae17b18c0f")
+		)
+		(pin "9"
+			(uuid "df8da44b-7a10-4659-aa16-666c9c7f0d1b")
+		)
+		(pin "10"
+			(uuid "961be84c-875a-49a9-9103-22bd74d6c35d")
+		)
+		(pin "13"
+			(uuid "7f8c3fd1-8072-4793-9bb1-a9863c37ac6e")
+		)
+		(pin "3"
+			(uuid "401c8929-fc09-4323-9eee-c31f666030fd")
+		)
+		(pin "26"
+			(uuid "9bc1cbb8-6a35-4137-a6d8-823b492c46b8")
+		)
+		(pin "27"
+			(uuid "5ccb1367-02de-456c-8fb1-99c7e09f8d4e")
+		)
+		(pin "17"
+			(uuid "5b125d63-5737-4df9-8036-e8fd84fad8f7")
+		)
+		(pin "28"
+			(uuid "7f12bb31-a5e1-4f17-8148-2f83d0acca41")
+		)
+		(pin "8"
+			(uuid "6ed0d880-71d0-434d-9b46-b4c2f502aacc")
+		)
+		(pin "19"
+			(uuid "89198145-ea08-4180-8889-8cd0275764f6")
+		)
+		(pin "30"
+			(uuid "d1391ce2-8e89-458a-a6b7-669326f60b45")
+		)
+		(pin "18"
+			(uuid "9deb544d-f3ac-4302-bab9-112b8d086e21")
+		)
+		(pin "6"
+			(uuid "e29809af-8e08-49e3-8d7e-5dc5002e9108")
+		)
+		(pin "24"
+			(uuid "67504163-96c8-4d0a-b191-d7353bebc288")
+		)
+		(pin "5"
+			(uuid "e5678e7d-b442-405c-b56f-8a95d9b92366")
+		)
+		(pin "32"
+			(uuid "58662bb5-cea8-471e-a0f9-dfc8cd7fa13d")
+		)
+		(instances
+			(project ""
+				(path "/80bd7774-bbdd-4a53-bd07-874de5be49cb"
+					(reference "U1")
 					(unit 1)
 				)
 			)
