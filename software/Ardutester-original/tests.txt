@@ -1,0 +1,56 @@
+BC547 NPN (E=TP1, B=TP2, C=TP3, hFE=220, Vbe=660mV)
+Serial Monitor                        Bus-Frames
+──────────────────────────────────    ────────────────────────────────────────────────
+NPN                                   [BUS] ID=0x0E DATA=0x00  → STAT: IDLE
+EBC= 123                              [BUS] ID=0x0E DATA=0x01  → STAT: BUSY
+h_FE= 220                             [BUS] ID=0x0A DATA=0x04  → MSG: Testing...
+V_BE= 660m                            [BUS] ID=0x00 DATA=0x01  → TYPE: BJT NPN
+                                      [BUS] ID=0x01 DATA=0x39  → PINS (TP1=E, TP2=B, TP3=C)
+                                      [BUS] ID=0x02 DATA=0xDC  → VAL1_LO  hFE
+                                      [BUS] ID=0x03 DATA=0x00  → VAL1_HI  (220 = 0x00DC)
+                                      [BUS] ID=0x0B DATA=0x00  → UNIT: kein Prefix, 0 Dez.
+                                      [BUS] ID=0x04 DATA=0x94  → VAL2_LO  Vbe
+                                      [BUS] ID=0x05 DATA=0x02  → VAL2_HI  (660 = 0x0294)
+                                      [BUS] ID=0x0B DATA=0x04  → UNIT: milli, 0 Dez.
+                                      [BUS] ID=0x0E DATA=0x02  → STAT: DONE
+
+Widerstand 4.7kΩ (TP1–TP3)
+Serial Monitor                        Bus-Frames
+──────────────────────────────────    ────────────────────────────────────────────────
+1-[  ]-3                              [BUS] ID=0x0E DATA=0x00  → STAT: IDLE
+4700Ω                                 [BUS] ID=0x0E DATA=0x01  → STAT: BUSY
+                                      [BUS] ID=0x0A DATA=0x04  → MSG: Testing...
+                                      [BUS] ID=0x00 DATA=0x06  → TYPE: Resistor
+                                      [BUS] ID=0x01 DATA=0x0D  → PINS (TP1=A, TP3=K)
+                                      [BUS] ID=0x02 DATA=0x5C  → VAL1_LO
+                                      [BUS] ID=0x03 DATA=0x12  → VAL1_HI  (4700 = 0x125C)
+                                      [BUS] ID=0x0B DATA=0x00  → UNIT: kilo, 0 Dez.
+                                      [BUS] ID=0x0E DATA=0x02  → STAT: DONE
+
+
+2N3904 NPN  (E=TP1, B=TP2, C=TP3 | hFE=200, Vbe=650mV)
+══════════════════════════════════════════════════════════════
+
+Serial Monitor:            Bus-Frames:
+  NPN                        [BUS] ID=0x0E DATA=0x00  → STAT: IDLE
+  EBC= 123                   [BUS] ID=0x0E DATA=0x01  → STAT: BUSY
+  h_FE= 200                  [BUS] ID=0x0A DATA=0x04  → MSG:  Testing...
+  V_BE= 650mV                [BUS] ID=0x00 DATA=0x01  → TYPE: BJT NPN
+                             [BUS] ID=0x01 DATA=0x39  → PINS: TP1=E, TP2=B, TP3=C
+                             [BUS] ID=0x02 DATA=0xC8  → VAL1_LO  hFE
+                             [BUS] ID=0x03 DATA=0x00  → VAL1_HI  (0x00C8 = 200)
+                             [BUS] ID=0x0B DATA=0x00  → UNIT: kein Prefix, 0 Dez.
+                             [BUS] ID=0x04 DATA=0x8A  → VAL2_LO  Vbe
+                             [BUS] ID=0x05 DATA=0x02  → VAL2_HI  (0x028A = 650)
+                             [BUS] ID=0x0B DATA=0x04  → UNIT: milli, 0 Dez.
+                             [BUS] ID=0x0E DATA=0x02  → STAT: DONE
+
+Bauteil                 Serial zeigt            Bus TYPE    PINS            VAL1 (LO/HI)                UNIT_SCALE
+BC547   NPN E=1,B=2,C=3 NPN hFE=220 Vbe=660m    0x01        0x39            0xDC/0x00                   0x00 dann 0x04
+4.7kΩ TP1-TP3           4700Ω                   0x06        0x0D            0x5C/0x12                   0x00
+100nF TP2-TP3           100nF                   0x07        0x0E            0x64/0x00                   0x02
+1N4007 A=1,K=2          Vf=650mV C=80pF         0x09        0x09            0x8A/0x02 dann 0x50/0x00    0x04 dann 0x01
+IRF540 S=1,G=2,D=3      Vth=3200mV Cgs=1200pF   0x02        0x390x80/0x0C   0x04 dann 0x11
+                                                            dann 0xB0/0x04
+
+

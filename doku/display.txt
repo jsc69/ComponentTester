@@ -1,0 +1,242 @@
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| NR | Bauteil           | LCD-Beispiel (16x2)   | Beispiel Serielle Ausgabe (Terminal)     | Enthaltene Rohdaten / Infos     |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 01 | NPN-Transistor    | L1: NPN EBC=123       | TYPE: NPN | PINS: EBC=123                | hFE, Vf, Iceo, Ices             |
+|    |                   | L2: hFE=350           | hFE: 350 | Vf: 640mV | Iceo: 0.0uA       |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 02 | PNP-Transistor    | L1: PNP EBC=123       | TYPE: PNP | PINS: EBC=123                | hFE, Vf, Iceo, Ices             |
+|    |                   | L2: hFE=320           | hFE: 320 | Vf: 635mV | Iceo: 0.1uA       |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 03 | N-E-MOSFET        | L1: N-E-MOS GDS=123   | TYPE: N-E-MOS | PINS: GDS=123            | Vth, Gate-Cap, Diode Vf         |
+|    |                   | L2: Vth=2.5V          | Vth: 2.5V | C: 1.2nF | Diode: 620mV      |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 04 | P-E-MOSFET        | L1: P-E-MOS GDS=123   | TYPE: P-E-MOS | PINS: GDS=123            | Vth, Gate-Cap, Diode Vf         |
+|    |                   | L2: Vth=2.8V          | Vth: 2.8V | C: 1.4nF | Diode: 615mV      |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 05 | N-D-MOSFET        | L1: N-D-MOS GDS=123   | TYPE: N-D-MOS | PINS: GDS=123            | Vgs, Gate-Cap, Diode Vf         |
+|    |                   | L2: Vgs=1.5V          | Vgs: 1.5V | C: 800pF | Diode: 630mV      |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 06 | P-D-MOSFET        | L1: P-D-MOS GDS=123   | TYPE: P-D-MOS | PINS: GDS=123            | Vgs, Gate-Cap, Diode Vf         |
+|    |                   | L2: Vgs=1.8V          | Vgs: 1.8V | C: 900pF | Diode: 610mV      |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 07 | N-JFET            | L1: N-JFET GDS=123    | TYPE: N-JFET | PINS: GDS=123             | Vgs(off), Idss                  |
+|    |                   | L2: Vgs=2.1V          | Vgs(off): 2.1V | Idss: 3.2mA             |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 08 | P-JFET            | L1: P-JFET GDS=123    | TYPE: P-JFET | PINS: GDS=123             | Vgs(off), Idss                  |
+|    |                   | L2: Vgs=2.3V          | Vgs(off): 2.3V | Idss: 2.5mA             |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 09 | IGBT              | L1: IGBT GCE=123      | TYPE: IGBT | PINS: GCE=123               | Vth, Gate-Cap, Diode Vf         |
+|    |                   | L2: Vth=3.5V          | Vth: 3.5V | C: 2.1nF | Diode: 640mV      |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 10 | Diode             | L1: 1->|-2            | Diode: 1->|-2                            | Vf, Cap, Leckstrom              |
+|    |                   | L2: Vf=650mV          | Vf: 650mV | C: 25pF | Ir: 0.05uA         |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 11 | Doppeldiode       | L1: 1->|-2-|<-3       | Diodes: 1->|-2-|<-3                      | Vf (beide), Cap (beide)         |
+|    |                   | L2: Vf1=620 Vf2=625   | D1: Vf=620mV | D2: Vf=625mV              |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 12 | Thyristor (SCR)   | L1: SCR GAC=123       | TYPE: SCR | PINS: GAC=123                | Trigger-Status                  |
+|    |                   | L2: OK (I<6mA)        | Trigger: OK (current < 6mA)              |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 13 | Triac             | L1: Triac 123         | TYPE: Triac | PINS: G123                 | Trigger-Status                  |
+|    |                   | L2: OK (I<6mA)        | Trigger: OK (current < 6mA)              |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 14 | Widerstand        | L1: 1-[]-2            | Resistor: 1-[]-2                         | Widerstandswert                 |
+|    |                   | L2: 10.02kO           | R: 10024 Ohm (10.02kO)                   |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 15 | Doppel-Widerst.   | L1: 1-[]-2-[]-3       | Resistors: 1-[]-2-[]-3                   | R1, R2                          |
+|    |                   | L2: R1=5k R2=5k       | R1: 5002 Ohm | R2: 4998 Ohm              |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 16 | Induktivität (L)  | L1: 1-mmm-3           | Inductor: 1-L-3                          | L, DC-Widerstand (DCR)          |
+|    |                   | L2: L=150uH           | L: 150uH | DCR: 1.2 Ohm                  |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+| 17 | Kondensator (C)   | L1: 1-||-2            | Capacitor: 1-||-2                        | Kapazität, ESR, Vloss           |
+|    |                   | L2: 470uF             | C: 470.2uF | ESR: 0.18O | Vloss: 0.5%    |                                 |
++----+-------------------+-----------------------+------------------------------------------+---------------------------------+
+
+
++----+------------+-----------+-------------+------------+-----------------------------------+
+| NR | Name       | Cart-Pin  | ATmega-Port | Funktion   | Bemerkung laut Kommentar          |
++----+------------+-----------+-------------+------------+-----------------------------------+
+| 01 | D0         | 22        | PD0         | data       | Datenbus Bit 0                    |
+| 02 | D1         | 23        | PD1         | data       | Datenbus Bit 1                    |
+| 03 | D2         | 24        | PD2         | data       | Datenbus Bit 2                    |
+| 04 | D3         | 25        | PD3         | data       | Datenbus Bit 3                    |
+| 05 | D4         | 26        | PD4         | data       | Datenbus Bit 4                    |
+| 06 | D5         | 27        | PD5         | data       | Datenbus Bit 5                    |
+| 07 | D6         | 28        | PD6         | data       | Datenbus Bit 6                    |
+| 08 | D7         | 29        | PD7         | data       | Datenbus Bit 7                    |
++----+------------+-----------+-------------+------------+-----------------------------------+
+| 09 | A0         | 06        | PC0         | data       | Adressleitung als Daten genutzt   |
+| 10 | A1         | 07        | PC1         | data       | Adressleitung als Daten genutzt   |
+| 11 | A2         | 08        | PC2         | data       | Adressleitung als Daten genutzt   |
+| 12 | A3         | 09        | PC3         | data       | Adressleitung als Daten genutzt   |
++----+------------+-----------+-------------+------------+-----------------------------------+
+| 13 | WR         | 03        | PB1         | control    | Schreibsignal                     |
+| 14 | RD         | 04        | PB2         | control    | Lesesignal                        |
+| 15 | CS         | 05        | PB0         | control    | Chip Select                       |
+| 16 | VIN        | 01        | VCC         | control    | Versorgungsspannung/Kontrolle     |
++----+------------+-----------+-------------+------------+-----------------------------------+
+| 17 | CLK (PHI)  | 02        | PB3         | button     | Takt-Pin fungiert als Taster      |
++----+------------+-----------+-------------+------------+-----------------------------------+
+| 18 | RES        | 30        | PC6 (RST)   | reset      | System-Reset (Pull low to reset)  |
++----+------------+-----------+-------------+------------+-----------------------------------+
+| 19 | A4-A15     | 10-21     | -           | indicator  | Statusanzeigen/Indikatoren        |
++----+------------+-----------+-------------+------------+-----------------------------------+
+
+
++------+------+------------+-----------+-----------+---------------------------------------+
+|      ID     |    Name    |          Data         | Function                              |
+|    A0-A3    |            |        D0 - D7        |                                       |
+| (Hex)| (Bin)|            | (Hex/Val) | (Bin)     | (Bedeutung / ArduTester-Logik)        |
++======+======+============+===========+===========+=======================================+
+| 0x0  | 0000 | TYPE       | 0x00      | 00000000  | TYPE: Unknown / No part found         |
+| 0x0  | 0000 | TYPE       | 0x01      | 00000001  | TYPE: BJT (Transistor NPN)            |
+| 0x0  | 0000 | TYPE       | 0x11      | 00010001  | TYPE: BJT (Transistor PNP)            |
+| 0x0  | 0000 | TYPE       | 0x02      | 00000010  | TYPE: FET (N-E-MOSFET)                |
+| 0x0  | 0000 | TYPE       | 0x12      | 00010010  | TYPE: FET (P-E-MOSFET)                |
+| 0x0  | 0000 | TYPE       | 0x03      | 00000011  | TYPE: FET (N-D-MOSFET)                |
+| 0x0  | 0000 | TYPE       | 0x13      | 00010011  | TYPE: FET (P-D-MOSFET)                |
+| 0x0  | 0000 | TYPE       | 0x04      | 00000100  | TYPE: FET (N-JFET)                    |
+| 0x0  | 0000 | TYPE       | 0x14      | 00010100  | TYPE: FET (P-JFET)                    |
+| 0x0  | 0000 | TYPE       | 0x05      | 00000101  | TYPE: IGBT                            |
+| 0x0  | 0000 | TYPE       | 0x06      | 00000110  | TYPE: Resistor                        |
+| 0x0  | 0000 | TYPE       | 0x16      | 00010110  | TYPE: Double Resistor                 |
+| 0x0  | 0000 | TYPE       | 0x07      | 00000111  | TYPE: Capacitor                       |
+| 0x0  | 0000 | TYPE       | 0x08      | 00001000  | TYPE: Inductor                        |
+| 0x0  | 0000 | TYPE       | 0x09      | 00001001  | TYPE: Diode                           |
+| 0x0  | 0000 | TYPE       | 0x19      | 00011001  | TYPE: Double Diode                    |
+| 0x0  | 0000 | TYPE       | 0x0A      | 00001010  | TYPE: Thyristor                       |
+| 0x0  | 0000 | TYPE       | 0x0B      | 00001011  | TYPE: Triac                           |
++------+------+------------+-----------+-----------+---------------------------------------+
+| 0x1  | 0001 | PINS       | Bit 0,1   | 000000xx  | Pin 1 (0:?, 1:E/S/A, 2:B/G, 3:C/D/K)  |
+| 0x1  | 0001 | PINS       | Bit 2,3   | 0000xx00  | Pin 2 (0:?, 1:E/S/A, 2:B/G, 3:C/D/K)  |
+| 0x1  | 0001 | PINS       | Bit 4,5   | 00xx0000  | Pin 3 (0:?, 1:E/S/A, 2:B/G, 3:C/D/K)  |
++------+------+------------+-----------+-----------+---------------------------------------+
+| 0x2  | 0010 | VAL1_LO    | 0x00..0xFF| %         | Hauptwert 1 (hFE, R, C) - LOW Byte    |
+| 0x3  | 0011 | VAL1_HI    | 0x00..0xFF| %         | Hauptwert 1 (hFE, R, C) - HIGH Byte   |
+| 0x4  | 0100 | VAL2_LO    | 0x00..0xFF| %         | Hauptwert 2 (Vf, L, ESR) - LOW Byte   |
+| 0x5  | 0101 | VAL2_HI    | 0x00..0xFF| %         | Hauptwert 2 (Vf, L, ESR) - HIGH Byte  |
+| 0x6  | 0110 | VAL3_LO    | 0x00..0xFF| %         | Nebenwert (Vth, Vloss) - LOW Byte     |
+| 0x7  | 0111 | VAL3_HI    | 0x00..0xFF| %         | Nebenwert (Vth, Vloss) - HIGH Byte    |
+| 0x8  | 1000 | VAL4_LO    | 0x00..0xFF| %         | Zusatzwert (Iceo, Ir) - LOW Byte      |
+| 0x9  | 1001 | VAL4_HI    | 0x00..0xFF| %         | Zusatzwert (Iceo, Ir) - HIGH Byte     |
++------+------+------------+-----------+-----------+---------------------------------------+
+| 0xA  | 1010 | TEXT_MSG   | 0x01      | ....0001  | MSG: "No part found"                  |
+| 0xA  | 1010 | TEXT_MSG   | 0x02      | ....0010  | MSG: "Short Circuit!"                 |
+| 0xA  | 1010 | TEXT_MSG   | 0x03      | ....0011  | MSG: "Remove Short!"                  |
+| 0xA  | 1010 | TEXT_MSG   | 0x04      | ....0100  | MSG: "Testing..."                     |
+| 0xA  | 1010 | TEXT_MSG   | 0x05      | ....0101  | MSG: "Cell!" (Voltage source)         |
+| 0xA  | 1010 | TEXT_MSG   | 0x06      | ....0110  | MSG: "Probing..."                     |
+| 0xA  | 1010 | TEXT_MSG   | 0x07      | ....0111  | MSG: "Calibration required"           |
+| 0xA  | 1010 | TEXT_MSG   | 0x08      | ....1000  | MSG: "Timeout!"                       |
++------+------+------------+-----------+-----------+---------------------------------------+
+| 0xB  | 1011 | UNIT_SCALE | 0x00      | ....0000  | UNIT: None / Plain Number             |
+| 0xB  | 1011 | UNIT_SCALE | 0x01      | ....0001  | UNIT: p (pico)                        |
+| 0xB  | 1011 | UNIT_SCALE | 0x02      | ....0010  | UNIT: n (nano)                        |
+| 0xB  | 1011 | UNIT_SCALE | 0x03      | ....0011  | UNIT: u (micro)                       |
+| 0xB  | 1011 | UNIT_SCALE | 0x04      | ....0100  | UNIT: m (milli)                       |
+| 0xB  | 1011 | UNIT_SCALE | 0x05      | ....0101  | UNIT: k (kilo)                        |
+| 0xB  | 1011 | UNIT_SCALE | 0x06      | ....0110  | UNIT: M (mega)                        |
++------+------+------------+-----------+-----------+---------------------------------------+
+| 0xB  | 1011 | DOT_POS    | 0x00      | 0000....  | FACTOR 1     (Zahl: 1234)             |
+| 0xB  | 1011 | DOT_POS    | 0x10      | 0001....  | FACTOR 0.1   (Zahl: 123.4)            |
+| 0xB  | 1011 | DOT_POS    | 0x20      | 0010....  | FACTOR 0.01  (Zahl: 12.34)            |
+| 0xB  | 1011 | DOT_POS    | 0x30      | 0011....  | FACTOR 0.001 (Zahl: 1.234)            |
++------+------+------------+-----------+-----------+---------------------------------------+
+| 0xC  | 1100 | BATT_V_LO  | 0x00..0xFF| %         | Battery Voltage in mV - LOW Byte      |
+| 0xD  | 1101 | BATT_V_HI  | 0x00..0xFF| %         | Battery Voltage in mV - HIGH Byte     |
++------+------+------------+-----------+-----------+---------------------------------------+
+| 0xE  | 1110 | SYS_STAT   | 0x00      | ....0000  | STAT: IDLE (Warten)                   |
+| 0xE  | 1110 | SYS_STAT   | 0x01      | ....0001  | STAT: BUSY (Messung aktiv)            |
+| 0xE  | 1110 | SYS_STAT   | 0x02      | ....0010  | STAT: DONE (Ergebnis fertig)          |
++------+------+------------+-----------+-----------+---------------------------------------+
+| 0xF  | 1111 | SYNC       | 0xAA      | 10101010  | SYNC: Bus-Check / Reset Frame         |
++------+------+------------+-----------+-----------+---------------------------------------+
+
+
++------+------+----------------+-------------+-------------------------------------------+
+| ID   | ID   | Funktion       | Daten(D7-D0)| Bedeutung / Parameter                     |
+| (Hex)| (Bin)| (A3-A0)        | (Dec/Hex)   |                                           |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x1  | 0001 | START_TEST     | 0x01        | Startet Standard-Bauteilprüfung           |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x2  | 0010 | FREQ_METER     | 0x01        | Startet Frequenzmessung                   |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x3  | 0011 | SIG_GEN (Freq) | 0 (0x00)    | Frequenz: 1 Hz                            |
+| 0x3  | 0011 | SIG_GEN (Freq) | 1 (0x01)    | Frequenz: 10 Hz                           |
+| 0x3  | 0011 | SIG_GEN (Freq) | 2 (0x02)    | Frequenz: 50 Hz                           |
+| 0x3  | 0011 | SIG_GEN (Freq) | 3 (0x03)    | Frequenz: 100 Hz                          |
+| 0x3  | 0011 | SIG_GEN (Freq) | 4 (0x04)    | Frequenz: 250 Hz                          |
+| 0x3  | 0011 | SIG_GEN (Freq) | 5 (0x05)    | Frequenz: 500 Hz                          |
+| 0x3  | 0011 | SIG_GEN (Freq) | 6 (0x06)    | Frequenz: 1 kHz                           |
+| 0x3  | 0011 | SIG_GEN (Freq) | 7 (0x07)    | Frequenz: 2.5 kHz                         |
+| 0x3  | 0011 | SIG_GEN (Freq) | 8 (0x08)    | Frequenz: 5 kHz                           |
+| 0x3  | 0011 | SIG_GEN (Freq) | 9 (0x09)    | Frequenz: 10 kHz                          |
+| 0x3  | 0011 | SIG_GEN (Freq) | 10 (0x0A)   | Frequenz: 25 kHz                          |
+| 0x3  | 0011 | SIG_GEN (Freq) | 11 (0x0B)   | Frequenz: 50 kHz                          |
+| 0x3  | 0011 | SIG_GEN (Freq) | 12 (0x0C)   | Frequenz: 100 kHz                         |
+| 0x3  | 0011 | SIG_GEN (Freq) | 13 (0x0D)   | Frequenz: 250 kHz                         |
+| 0x3  | 0011 | SIG_GEN (Freq) | 14 (0x0E)   | Frequenz: 500 kHz                         |
+| 0x3  | 0011 | SIG_GEN (Freq) | 15 (0x0F)   | Frequenz: 1 MHz                           |
+| 0x3  | 0011 | SIG_GEN (Freq) | 16 (0x10)   | Frequenz: 2 MHz                           |
+| 0x3  | 0011 | SIG_GEN (Freq) | 255 (0xFF)  | Generator STOPP                           |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x4  | 0100 | PWM_GEN        | 1 - 99      | Pulsweite in % (1% bis 99%)               |
+| 0x4  | 0100 | PWM_GEN        | 0 (0x00)    | PWM STOPP                                 |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x5  | 0101 | C_ESR_METER    | 0x01        | Startet Kondensator + ESR Messung         |
+| 0x5  | 0101 | C_ESR_METER    | 0x00        | ESR STOPP                                 |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x6  | 0110 | SELF_TEST      | 0x01        | Startet Kalibrierung / Selbsttest         |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x7  | 0111 | POWER_OFF      | 0x01        | Schaltet ArduTester aus (Standby)         |
++------+------+----------------+-------------+-------------------------------------------+
+
+Connections:
++--------+----------+---------+----------------+
++ ATmega | GBC_CARD | ESP32   | USE            |
++========+==========+=========+================+
++ Vcc    | CARD_VCC |         | Power          |
+| PC3    | CARD_CLK | U2.P1_0 | Button         |
+| PC4    | CARD_WR  | U2.P1_1 | not used       |
+| PC5    | CARD_RD  | U2.P1_2 | not used       |
+| PD0    | CARD_CS  | U2.P1_3 | not used       |
+| PE0    | CARD_A0  | U1.P0_0 | ID.0           |
+| PE1    | CARD_A1  | U1.P0_1 | ID.1           |
+| PE2    | CARD_A2  | U1.P0_2 | ID.2           |
+| PE3    | CARD_A3  | U1.P0_3 | ID.3           |
+|        | CARD_A4  | U1.P0_4 | nc             |
+|        | CARD_A5  | U1.P0_5 | nc             |
+|        | CARD_A6  | U1.P0_6 | nc             |
+|        | CARD_A7  | U1.P0_7 | nc             |
+|        | CARD_A8  | U1.P1_0 | nc             |
+|        | CARD_A9  | U1.P1_1 | nc             |
+|        | CARD_A10 | U1.P1_2 | nc             |
+|        | CARD_A11 | U1.P1_3 | nc             |
+|        | CARD_A12 | U1.P1_4 | nc             |
+|        | CARD_A13 | U1.P1_5 | nc             |
+|        | CARD_A14 | U1.P1_6 | nc             |
+|        | CARD_A15 | U1.P1_7 | Identifier     |
+| PB0    | CARD_D0  | U2.P0_0 | Data.0         |
+| PB1    | CARD_D1  | U2.P0_1 | Data.1         |
+| PB2    | CARD_D2  | U2.P0_2 | Data.2         |
+| PB3    | CARD_D3  | U2.P0_3 | Data.3         |
+| PB4    | CARD_D4  | U2.P0_4 | Data.4         |
+| PB5    | CARD_D5  | U2.P0_5 | Data.5         |
+| PB6    | CARD_D6  | U2.P0_6 | Data.6         |
+| PB7    | CARD_D7  | U2.P0_7 | Data.7         |
+| PC6    | CARD_RES | U2.P1_4 | Reset          |
+| PD1    | CARD_VIN | U2.P1_5 | not used       |
+| GND    | CARD_GND | GND     | Power          |
+|        |          | U2.P1_6 | Switch 5V/3.3V |
+|        |          | U2.P1_7 | nc             |
+| PC0    |          |         | TP1            |
+| PC1    |          |         | TP2            |
+| PC2    |          |         | TP3            |
+| PD2    |          |         | TP1 (680)      |
+| PD3    |          |         | TP1 (470k)     |
+| PD4    |          |         | TP2 (680)      |
+| PD5    |          |         | TP2 (470k)     |
+| PD6    |          |         | TP3 (680)      |
+| PD7    |          |         | TP3 (470k)     |
++--------+----------+---------+----------------+

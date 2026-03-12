@@ -61,21 +61,39 @@
 char foo; 
 
                                                  //ARDUTESTER FEATURES
+// ================================================================
+// FOR_BRUTZELBOY: ESP32-Cartridge-Schnittstelle aktivieren.
+// Auskommentieren fuer Original-Verhalten (LCD_PRINT etc.).
+// Mit FOR_BRUTZELBOY bleiben alle DEBUG_PRINT-Ausgaben erhalten.
+// ================================================================
+#define FOR_BRUTZELBOY
 
 //Remember LCD_PRINT or DEBUG_PRINT
 #define BUTTON_INST                              //Button Installed
-#define LCD_PRINT                                //Print on LCD
+// LCD nicht verfügbar wenn BrutzelBoy aktiv — Ausgabe über ESP32-Display
+//#define LCD_PRINT                              //Print on LCD
 //Remember DEBUG_PRINT or ATSW
 //#define ATSW                                   //ArduTester Software Client Enabled
-#define DEBUG_PRINT                            //Print on Serial Port
+// DEBUG_PRINT nur wenn kein LCD aktiv (LCD_PRINT und DEBUG_PRINT schliessen sich aus)
+#ifndef LCD_PRINT
+  #define DEBUG_PRINT                          //Print on Serial Port
+#endif
+
 #define DET_COMP_ANALYSIS                        //Detailed Component Analysis (Soon)
 #define TIMEOUT_BL            600                //LCD Backlight Timeout
 #define LONG_PRESS            26                 //Button Long Press
 #define USER_WAIT             3000               //Nexpage Timeout
 
 //Check features
-#if not defined(__AVR_ATmega328P__)
-    #error Sorry, this program works only on Arduino Uno 
+#ifdef FOR_BRUTZELBOY
+  // ATmega328PB ist pin-kompatibel mit 328P, hat zusätzlich PORTE (PE0-PE3)
+  #if not defined(__AVR_ATmega328P__) && not defined(__AVR_ATmega328PB__)
+    #error FOR_BRUTZELBOY benoetigt ATmega328P oder ATmega328PB
+  #endif
+#else
+  #if not defined(__AVR_ATmega328P__)
+    #error Sorry, this program works only on Arduino Uno
+  #endif
 #endif
 #if defined(LCD_PRINT) && defined(DEBUG_PRINT)
   #error Invalid Parameters: Use LCD_PRINT or DEBUG_PRINT
@@ -118,8 +136,15 @@ char foo;
     - pin 4: Rl3 680R (test pin 3)
     - pin 5: Rh3 470k (test pin 3)
 */
-#define R_PORT                PORTB              //Port data register 
-#define R_DDR                 DDRB               //Port data direction register
+#ifdef FOR_BRUTZELBOY
+  // ATmega328PB-Platine: Widerstände an PORTD (PD2-PD7) statt PORTB
+  // Original-Hardware (Arduino Uno): PORTB
+  #define R_PORT                PORTD            //Port data register
+  #define R_DDR                 DDRD             //Port data direction register
+#else
+  #define R_PORT                PORTB            //Port data register
+  #define R_DDR                 DDRB             //Port data direction register
+#endif
 
 //Push button
 #define TEST_BUTTON           A3                 //Test/start push button (low active)
@@ -493,7 +518,25 @@ const unsigned int SmallCap_table[]  = {954, 903, 856, 814, 775, 740, 707, 676, 
 const unsigned int Inductor_table[]  = {4481, 3923, 3476, 3110, 2804, 2544, 2321, 2128, 1958, 1807, 1673, 1552, 1443, 1343, 1252, 1169, 1091, 1020, 953, 890, 831, 775, 721, 670, 621, 574, 527, 481, 434, 386, 334, 271};
 
 //Bitmasks for Rl probe resistors based on probe ID
-const unsigned char Rl_table[]  = {(1 << (TP1 * 2)), (1 << (TP2 * 2)), (1 << (TP3 * 2))};
+#ifdef FOR_BRUTZELBOY
+  // ATmega328PB-Platine: Rl an PD2/PD4/PD6, Rh an PD3/PD5/PD7
+  // (Original Arduino Uno: Rl an PB0/PB2/PB4, Rh an PB1/PB3/PB5)
+  const unsigned char Rl_table[] = {(1 << 2), (1 << 4), (1 << 6)};  // PD2, PD4, PD6
+  #define RL_MASK(tp)  (Rl_table[tp])
+  #define RH_MASK(tp)  (Rl_table[tp] << 1)
+
+  // Bus-Defines für ESP32-Schnittstelle
+  #define BUS_ID_DDR    DDRE    // PE0-PE3 fuer ID (CARD_A0-A3)
+  #define BUS_ID_PORT   PORTE
+  #define BUS_DATA_DDR  DDRB    // PB0-PB7 fuer Daten (CARD_D0-D7)
+  #define BUS_DATA_PORT PORTB
+
+  uint8_t ValueCounter = 0;    // Zaehler fuer VAL1..VAL4 in DisplayValue()
+#else
+  const unsigned char Rl_table[]  = {(1 << (TP1 * 2)), (1 << (TP2 * 2)), (1 << (TP3 * 2))};
+  #define RL_MASK(tp)  (Rl_table[tp])
+  #define RH_MASK(tp)  (Rl_table[tp] << 1)
+#endif
 //Bitmasks for ADC pins based on probe ID
 const unsigned char ADC_table[]  = {(1 << TP1), (1 << TP2), (1 << TP3)};
 
@@ -503,6 +546,382 @@ byte LargeCap(Capacitor_Type *Cap);
 byte MeasureInductor(Resistor_Type *Resistor);
 void ShowDiode_Uf(Diode_Type *Diode);
 void ShowDiode_C(Diode_Type *Diode);
+
+// ================================================================
+// FOR_BRUTZELBOY: Bus-Kommunikation und Kommandoempfang
+//
+// Pin-Belegung Handshake:
+//   PC4 (CARD_WR) - ATmega → ESP32: "Frame bereit" Strobe
+//   PC5 (CARD_RD) - ESP32  → ATmega: "Frame ACK"
+//
+// Pin-Belegung Kommando-Kanal:
+//   PD0 (CARD_CS) - ESP32  → ATmega: "Kommando pending" Flag
+//   PE0-PE3       - ESP32  → ATmega: Kommando-ID (4 Bit, 16 Kommandos)
+//   PB0-PB7       - ESP32  → ATmega: Kommando-Parameter
+//   PC4 (CARD_WR) - ATmega → ESP32: "Bereit zum Lesen"
+//   PC5 (CARD_RD) - ESP32  → ATmega: "Kommando gueltig / ACK"
+//
+// Kommando-Tabelle (PE0-PE3):
+//   0x0  NOP          - nichts tun
+//   0x1  START_TEST   - neuen Bauteiltest starten
+//   0x2  FREQ_METER   - Frequenzmessung (STUB - noch nicht implementiert)
+//   0x3  SIG_GEN      - Signalgenerator, Param = Frequenz-Index (s.u.)
+//   0x4  PWM_GEN      - PWM-Generator, Param = Duty-Cycle % (1-99, 0=STOPP)
+//   0x5  C_ESR_METER  - Kondensator+ESR-Messung (STUB - noch nicht impl.)
+//   0x6  SELF_TEST    - Kalibrierung / Selbsttest
+//   0x7  POWER_OFF    - ArduTester ausschalten (Standby)
+//   0x8-0xF  reserviert
+//
+// SIG_GEN Frequenz-Index (Param = PB0-PB7):
+//   Unterstuetzt (PWM_Tool): 0x00=100Hz, 0x01=250Hz, 0x02=500Hz,
+//     0x03=1kHz, 0x04=2.5kHz, 0x05=5kHz, 0x06=10kHz, 0x07=25kHz
+//   Nicht unterstuetzt (TODO): 0x08=50Hz, 0x09=10Hz, 0x0A=1Hz,
+//     0x0B=50kHz, 0x0C=100kHz, 0x0D=250kHz, 0x0E=500kHz,
+//     0x0F=1MHz, 0x10=2MHz
+//   0xFF = Generator STOPP
+// ================================================================
+#ifdef FOR_BRUTZELBOY
+
+// Handshake-Pin-Defines
+#define BB_WR_DDR   DDRC
+#define BB_WR_PORT  PORTC
+#define BB_WR_BIT   PC4    // ATmega → ESP32: Frame/Bereit Strobe
+#define BB_RD_PIN   PINC
+#define BB_RD_DDR   DDRC
+#define BB_RD_BIT   PC5    // ESP32  → ATmega: ACK (Input)
+#define BB_CS_PIN   PIND
+#define BB_CS_DDR   DDRD
+#define BB_CS_BIT   PD0    // ESP32  → ATmega: Kommando pending (Input)
+
+// Handshake-Timeout in Microsekunden (ESP32 I2C max ~1ms pro Zugriff)
+#define BB_ACK_TIMEOUT_US  5000
+
+// Handshake initialisieren (in setup() aufrufen)
+void bbHandshakeInit() {
+  BB_WR_DDR  |=  (1 << BB_WR_BIT);              // PC4 Ausgang
+  BB_WR_PORT &= ~(1 << BB_WR_BIT);              // PC4 = LOW
+  BB_RD_DDR  &= ~(1 << BB_RD_BIT);              // PC5 Eingang
+  BB_CS_DDR  &= ~(1 << BB_CS_BIT);              // PD0 Eingang
+}
+
+// Einen Frame senden mit Handshake.
+// Gibt true zurück wenn ESP32 ACK gegeben hat, false bei Timeout.
+// Port-Zustände werden gesichert damit Messwiderstände unbeeinflusst bleiben.
+bool sendToEsp(uint8_t id, uint8_t data) {
+  #ifdef DEBUG_PRINT
+    Serial.print(F("[BUS] ID=0x"));
+    if (id   < 0x10) Serial.print(F("0"));
+    Serial.print(id, HEX);
+    Serial.print(F(" DATA=0x"));
+    if (data < 0x10) Serial.print(F("0"));
+    Serial.println(data, HEX);
+  #endif
+
+  uint8_t oldDDRE  = DDRE,  oldDDRB  = DDRB;
+  uint8_t oldPORTE = PORTE, oldPORTB = PORTB;
+
+  // Bus auf Ausgang, ID + Data anlegen
+  BUS_ID_DDR  |= 0x0F;
+  BUS_DATA_DDR = 0xFF;
+  BUS_ID_PORT  = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
+  BUS_DATA_PORT = data;
+
+  // WR-Strobe: "Frame bereit"
+  BB_WR_PORT |= (1 << BB_WR_BIT);
+
+  // Warten auf ACK vom ESP32 (PC5 HIGH), mit Timeout
+  uint16_t t = 0;
+  while (!(BB_RD_PIN & (1 << BB_RD_BIT))) {
+    delayMicroseconds(10);
+    if (++t > (BB_ACK_TIMEOUT_US / 10)) {
+      // Timeout: Bus freigeben und abbrechen
+      BB_WR_PORT &= ~(1 << BB_WR_BIT);
+      DDRE = oldDDRE; DDRB = oldDDRB;
+      PORTE = oldPORTE; PORTB = oldPORTB;
+      #ifdef DEBUG_PRINT
+        Serial.println(F("[BUS] TIMEOUT"));
+      #endif
+      return false;
+    }
+  }
+
+  // WR LOW: Frame wird nicht mehr gehalten
+  BB_WR_PORT &= ~(1 << BB_WR_BIT);
+
+  // Warten bis ESP32 ACK wieder LOW zieht (bereit für nächsten Frame)
+  t = 0;
+  while (BB_RD_PIN & (1 << BB_RD_BIT)) {
+    delayMicroseconds(10);
+    if (++t > (BB_ACK_TIMEOUT_US / 10)) break;  // Timeout ignorieren
+  }
+
+  // Bus freigeben
+  DDRE = oldDDRE; DDRB = oldDDRB;
+  PORTE = oldPORTE; PORTB = oldPORTB;
+
+  return true;
+}
+
+// Fallback: Frame ohne Handshake senden (z.B. wenn ESP32 nicht antwortet)
+// Benutzt feste Delays wie die urspruengliche Implementierung.
+void sendToEspNoAck(uint8_t id, uint8_t data) {
+  uint8_t oldDDRE  = DDRE,  oldDDRB  = DDRB;
+  uint8_t oldPORTE = PORTE, oldPORTB = PORTB;
+  BUS_ID_DDR  |= 0x0F;
+  BUS_DATA_DDR = 0xFF;
+  BUS_ID_PORT  = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
+  BUS_DATA_PORT = data;
+  delayMicroseconds(5000);
+  DDRE = oldDDRE; DDRB = oldDDRB;
+  PORTE = oldPORTE; PORTB = oldPORTB;
+  delayMicroseconds(3000);
+}
+
+// Frame senden: erst mit Handshake versuchen, bei Timeout Fallback
+void sendToEspReliable(uint8_t id, uint8_t data) {
+  if (!sendToEsp(id, data)) {
+    // ESP32 hat nicht geantwortet - Fallback ohne Handshake
+    sendToEspNoAck(id, data);
+    sendToEspNoAck(id, data);
+  }
+}
+
+// TYPE + PINS senden (nach jeder Messung aufrufen)
+void reportComponent() {
+  uint8_t type = 0x00;
+  uint8_t pins = 0x00;
+  ValueCounter = 0;
+
+  switch (Check.Found) {
+    case COMP_BJT:
+      type = (Check.Type == TYPE_NPN) ? 0x01 : 0x11;
+      pins = ((BJT.E + 1) & 0x3)
+           | (((BJT.B + 1) & 0x3) << 2)
+           | (((BJT.C + 1) & 0x3) << 4);
+      break;
+    case COMP_FET:
+      if      (Check.Type & TYPE_JFET)        type = (Check.Type & TYPE_N_CHANNEL) ? 0x04 : 0x14;
+      else if (Check.Type & TYPE_ENHANCEMENT) type = (Check.Type & TYPE_N_CHANNEL) ? 0x02 : 0x12;
+      else                                    type = (Check.Type & TYPE_N_CHANNEL) ? 0x03 : 0x13;
+      pins = ((FET.S + 1) & 0x3)
+           | (((FET.G + 1) & 0x3) << 2)
+           | (((FET.D + 1) & 0x3) << 4);
+      break;
+    case COMP_IGBT:
+      type = 0x05;
+      pins = ((FET.S + 1) & 0x3)
+           | (((FET.G + 1) & 0x3) << 2)
+           | (((FET.D + 1) & 0x3) << 4);
+      break;
+    case COMP_DIODE:
+      type = (Check.Diodes > 1) ? 0x19 : 0x09;
+      pins = ((Diodes[0].A + 1) & 0x3)
+           | (((Diodes[0].C + 1) & 0x3) << 2);
+      break;
+    case COMP_RESISTOR:
+      type = (Check.Resistors > 1) ? 0x16 : 0x06;
+      pins = ((Resistors[0].A + 1) & 0x3)
+           | (((Resistors[0].B + 1) & 0x3) << 2);
+      break;
+    case COMP_CAPACITOR:
+      type = 0x07;
+      pins = ((Caps[0].A + 1) & 0x3)
+           | (((Caps[0].B + 1) & 0x3) << 2);
+      break;
+    case COMP_THYRISTOR:
+      type = 0x0A;
+      pins = ((BJT.B + 1) & 0x3)
+           | (((BJT.C + 1) & 0x3) << 2)
+           | (((BJT.E + 1) & 0x3) << 4);
+      break;
+    case COMP_TRIAC:
+      type = 0x0B;
+      pins = ((BJT.B + 1) & 0x3)
+           | (((BJT.C + 1) & 0x3) << 2)
+           | (((BJT.E + 1) & 0x3) << 4);
+      break;
+    case COMP_INDUCTOR:
+      type = 0x08;
+      pins = ((Resistors[0].A + 1) & 0x3)
+           | (((Resistors[0].B + 1) & 0x3) << 2);
+      break;
+    default:
+      type = 0x00; pins = 0x00;
+      break;
+  }
+
+  sendToEspReliable(0x00, type);
+  sendToEspReliable(0x01, pins);
+}
+
+// Kommando vom ESP32 empfangen und ausfuehren.
+// Wird am Ende jedes Messzyklus geprueft (nach DONE gesendet wurde).
+// Rueckgabe: true wenn ein Kommando ausgefuehrt wurde, das einen neuen
+// Messzyklus ausloest (START_TEST), sonst false.
+bool checkBrutzelBoyCommand() {
+  // Kein Kommando wenn CS (PD0) nicht HIGH
+  if (!(BB_CS_PIN & (1 << BB_CS_BIT))) return false;
+
+  #ifdef DEBUG_PRINT
+    Serial.println(F("[CMD] Kommando pending"));
+  #endif
+
+  // Bereit signalisieren: WR HIGH = "ATmega bereit zum Lesen"
+  BB_WR_PORT |=  (1 << BB_WR_BIT);
+
+  // Busrichtung umkehren: PE0-PE3 und PB0-PB7 als Eingang
+  uint8_t oldDDRE  = DDRE, oldDDRB  = DDRB;
+  uint8_t oldPORTE = PORTE, oldPORTB = PORTB;
+  BUS_ID_DDR  &= ~0x0F;                          // PE0-PE3 Eingang
+  BUS_DATA_DDR = 0x00;                           // PB0-PB7 Eingang
+
+  // Warten bis ESP32 Kommando angelegt hat (PC5 HIGH = "Kommando gueltig")
+  uint16_t t = 0;
+  while (!(BB_RD_PIN & (1 << BB_RD_BIT))) {
+    delayMicroseconds(10);
+    if (++t > (BB_ACK_TIMEOUT_US / 10)) {
+      // Timeout: abbrechen
+      BB_WR_PORT &= ~(1 << BB_WR_BIT);
+      DDRE = oldDDRE; DDRB = oldDDRB;
+      PORTE = oldPORTE; PORTB = oldPORTB;
+      #ifdef DEBUG_PRINT
+        Serial.println(F("[CMD] TIMEOUT"));
+      #endif
+      return false;
+    }
+  }
+
+  // Kommando und Parameter lesen
+  uint8_t cmd   = PINE & 0x0F;
+  uint8_t param = PINB;
+
+  // Quittieren: WR LOW = "gelesen"
+  BB_WR_PORT &= ~(1 << BB_WR_BIT);
+
+  // Warten bis ESP32 fertig (PC5 LOW)
+  t = 0;
+  while (BB_RD_PIN & (1 << BB_RD_BIT)) {
+    delayMicroseconds(10);
+    if (++t > (BB_ACK_TIMEOUT_US / 10)) break;
+  }
+
+  // Bus wiederherstellen
+  DDRE = oldDDRE; DDRB = oldDDRB;
+  PORTE = oldPORTE; PORTB = oldPORTB;
+
+  #ifdef DEBUG_PRINT
+    Serial.print(F("[CMD] cmd=0x")); Serial.print(cmd, HEX);
+    Serial.print(F(" param=0x")); Serial.println(param, HEX);
+  #endif
+
+  // Kommando ausfuehren
+  switch (cmd) {
+
+    case 0x0:  // NOP
+      break;
+
+    case 0x1:  // START_TEST - neuen Bauteiltest starten
+      return true;                               // Hauptloop neu starten
+
+    case 0x2:  // FREQ_METER - Frequenzmessung
+      // STUB: Frequenzmessung noch nicht implementiert
+      #ifdef DEBUG_PRINT
+        Serial.println(F("[CMD] FREQ_METER: nicht implementiert"));
+      #endif
+      sendToEspReliable(0x0A, 0x01);            // MSG: No part (Platzhalter)
+      break;
+
+    case 0x3: {  // SIG_GEN - Signalgenerator
+      // Frequenztabelle gemaess Protokoll:
+      //   0x00=1Hz, 0x01=10Hz, 0x02=50Hz, 0x03=100Hz, 0x04=250Hz,
+      //   0x05=500Hz, 0x06=1kHz, 0x07=2.5kHz, 0x08=5kHz, 0x09=10kHz,
+      //   0x0A=25kHz, 0x0B=50kHz, 0x0C=100kHz, 0x0D=250kHz,
+      //   0x0E=500kHz, 0x0F=1MHz, 0x10=2MHz
+      //   0xFF = STOPP
+      if (param == 0xFF) {
+        // Generator stoppen: Timer deaktivieren
+        TCCR1B = 0; TCCR1A = 0; R_DDR = 0;
+        break;
+      }
+      // Von PWM_Tool() unterstuetzte Indizes (100Hz - 25kHz):
+      //   Protokoll 0x03=100Hz → PWM_Freq_table[0]
+      //   Protokoll 0x04=250Hz → PWM_Freq_table[1]
+      //   Protokoll 0x05=500Hz → PWM_Freq_table[2]
+      //   Protokoll 0x06=1kHz  → PWM_Freq_table[3]
+      //   Protokoll 0x07=2.5kHz→ PWM_Freq_table[4]
+      //   Protokoll 0x08=5kHz  → PWM_Freq_table[5]
+      //   Protokoll 0x09=10kHz → PWM_Freq_table[6]
+      //   Protokoll 0x0A=25kHz → PWM_Freq_table[7]
+      if (param >= 0x03 && param <= 0x0A) {
+        unsigned int freq = PWM_Freq_table[param - 0x03];
+        PWM_Tool(freq);
+      } else {
+        // TODO: Frequenzen ausserhalb PWM_Tool-Bereich (1Hz-50Hz, >25kHz)
+        // Protokoll-Indizes 0x00-0x02 (1Hz, 10Hz, 50Hz) und
+        // 0x0B-0x10 (50kHz-2MHz) noch nicht implementiert
+        #ifdef DEBUG_PRINT
+          Serial.print(F("[CMD] SIG_GEN: Frequenz-Index 0x"));
+          Serial.print(param, HEX);
+          Serial.println(F(" nicht unterstuetzt"));
+        #endif
+      }
+      break;
+    }
+
+    case 0x4:  // PWM_GEN - PWM mit variablem Duty-Cycle
+      // param = Duty-Cycle in % (1-99), 0 = STOPP
+      // TODO: PWM_Tool() erweitern um Duty-Cycle-Parameter
+      // Aktuell: param wird empfangen aber ignoriert, 50% fest
+      if (param == 0x00) {
+        TCCR1B = 0; TCCR1A = 0; R_DDR = 0;      // STOPP
+      } else if (param >= 1 && param <= 99) {
+        // TODO: PWM_Tool_WithDuty(freq, param) implementieren
+        // Vorlaeufig: 1kHz mit festem 50% Duty-Cycle
+        #ifdef DEBUG_PRINT
+          Serial.print(F("[CMD] PWM_GEN: Duty-Cycle "));
+          Serial.print(param); Serial.println(F("% (TODO: wird noch ignoriert)"));
+        #endif
+        PWM_Tool(1000);
+      }
+      break;
+
+    case 0x5:  // C_ESR_METER - Kondensator + ESR Messung
+      // STUB: ESR-Messung noch nicht implementiert
+      #ifdef DEBUG_PRINT
+        Serial.println(F("[CMD] C_ESR_METER: nicht implementiert"));
+      #endif
+      break;
+
+    case 0x6:  // SELF_TEST - Kalibrierung / Selbsttest
+      SelfTest();
+      break;
+
+    case 0x7:  // POWER_OFF - Standby
+      // ATmega in Power-Down versetzen (wdt_disable vorher)
+      wdt_disable();
+      #ifdef DEBUG_PRINT
+        Serial.println(F("[CMD] POWER_OFF"));
+      #endif
+      set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+      sleep_enable();
+      sleep_cpu();
+      // Hier geht es weiter nach Wake-up (z.B. durch Reset)
+      sleep_disable();
+      break;
+
+    default:
+      #ifdef DEBUG_PRINT
+        Serial.print(F("[CMD] Unbekanntes Kommando: 0x"));
+        Serial.println(cmd, HEX);
+      #endif
+      break;
+  }
+
+  return false;
+}
+
+#endif  // FOR_BRUTZELBOY
+// ================================================================
 
 //Program control
 byte                          RunsPassed;        //Counter for successful measurements
@@ -535,7 +954,11 @@ void setup()
     Serial.begin(19200);
   #endif
   #ifdef DEBUG_PRINT   
-    Serial.begin(9600);                          //Serial Output
+    #ifdef FOR_BRUTZELBOY
+      Serial.begin(115200);                      //BrutzelBoy: höhere Baudrate
+    #else
+      Serial.begin(9600);                        //Serial Output
+    #endif
   #endif
   //Setup ÂµC
   ADCSRA = (1 << ADEN) | ADC_CLOCK_DIV;          //Enable ADC and set clock divider 
@@ -544,17 +967,20 @@ void setup()
   wdt_disable();                                 //Disable watchdog 
   //Default offsets and values
   Config.Samples = ADC_SAMPLES;                  //Number of ADC samples 
-  Config.AutoScale = 1;                          //Enable ADC auto scaling 
+#ifdef FOR_BRUTZELBOY
+  Config.AutoScale = 0;  //Disable ADC auto scaling (ATmega328PB: Bandgap settling too slow)
+#else
+  Config.AutoScale = 1;                          //Enable ADC auto scaling
+#endif
   Config.RefFlag = 1;                            //No ADC reference set yet 
   delay(100);
   //Reset variables
   RunsMissed = 0;
   RunsPassed = 0;
   Config.TesterMode = MODE_CONTINOUS;            //Set default mode: continous
-  #ifdef BUTTON_INST
-    pinMode(TEST_BUTTON, INPUT_PULLUP);          //Initialize the pushbutton pin as an input
+  #ifdef FOR_BRUTZELBOY
+    bbHandshakeInit();                           // Handshake-Pins initialisieren
   #endif
-  //Init
   LoadAdjust();                                  //Load adjustment values
   #ifdef DEBUG_PRINT
     Serial.print(X("A  R  D  U  T  E  S  T  E  R "));
@@ -575,7 +1001,10 @@ void setup()
 void loop()
 {
   byte Test;
-  #ifdef BUTTON_INST
+  #ifdef FOR_BRUTZELBOY
+    // A3 (PC3) = CARD_CLK, kein Button — direkt messen ohne Warten
+    Test = 1;
+  #elif defined(BUTTON_INST)
     Test = TestKey(0, 0);                        //Wait user
   #else
     delay(3000);                                 //No button installed, Wait 3 seconds
@@ -592,6 +1021,9 @@ void loop()
   Check.Resistors = 0;
   BJT.hFE = 0;
   BJT.I_CE0 = 0;
+  #ifdef FOR_BRUTZELBOY
+    sendToEspReliable(0x0E, 0x00);               // STATUS: IDLE
+  #endif
   //Reset hardware
   SetADCHiz();                                   //Set all pins of ADC port as input  
   lcd_clear();                                   //Clear LCD
@@ -626,6 +1058,10 @@ void loop()
         //Display start of probing
         lcd_line(2);                             //Move to line #2
         lcd_fixed_string(Running_str);           //Display: probing...
+        #ifdef FOR_BRUTZELBOY
+          sendToEspReliable(0x0E, 0x01);         // STATUS: BUSY
+          sendToEspReliable(0x0A, 0x04);         // MSG: Probing...
+        #endif
         DischargeProbes();
         if (Check.Found == COMP_ERROR)           //Discharge failed
         {                                        //Only for Standalone Version!                                     
@@ -716,6 +1152,9 @@ void loop()
                 break;
             }
           #endif
+          #ifdef FOR_BRUTZELBOY
+            reportComponent();                   // TYPE + PINS senden
+          #endif
           switch (Check.Found)
           {
             case COMP_ERROR:
@@ -748,6 +1187,19 @@ void loop()
             default:                             //No component found
               ShowFail();
           }
+          #ifdef FOR_BRUTZELBOY
+            sendToEspReliable(0x0E, 0x02);       // STATUS: DONE
+            // Warten auf CMD_START_TEST vom ESP32 (Button-Druck)
+            // checkBrutzelBoyCommand() gibt true zurueck wenn START_TEST empfangen
+            {
+              bool start = false;
+              while (!start) {
+                sendToEspReliable(0x0E, 0x02);   // STATUS: DONE wiederholen
+                start = checkBrutzelBoyCommand();
+                if (!start) delay(200);
+              }
+            }
+          #endif
           #ifdef ATSW                            //Client output
             Serial.println("@>");
             Serial.println(Check.Found);
@@ -861,8 +1313,8 @@ void DischargeProbes(void)
   SetADCLow();
   //All probe pins: Rh and Rl pull-down
   R_PORT = 0;
-  R_DDR = (2 << (TP1 * 2)) | (2 << (TP2 * 2)) | (2 << (TP3 * 2));
-  R_DDR |= (1 << (TP1 * 2)) | (1 << (TP2 * 2)) | (1 << (TP3 * 2));
+  R_DDR = RH_MASK(TP1) | RH_MASK(TP2) | RH_MASK(TP3);
+  R_DDR |= RL_MASK(TP1) | RL_MASK(TP2) | RL_MASK(TP3);
   //Get current voltages
   U_old[0] = ReadU(TP1);
   U_old[1] = ReadU(TP2);
@@ -3189,6 +3641,34 @@ void lcd_data(unsigned char Data)
 //Display value and unit
 void DisplayValue(unsigned long Value, signed char Exponent, unsigned char Unit)
 {
+#ifdef FOR_BRUTZELBOY
+  // --- BrutzelBoy: Wert skalieren und als Bus-Frame senden ---
+  {
+    unsigned long busVal = Value;
+    signed char   busExp = Exponent;
+    uint8_t busIndex = 0, busOffset = 0;
+
+    while (busVal >= 10000) { busVal += 5; busVal /= 10; busExp++; }
+    if (busExp >= -12) {
+      busExp += 12;
+      busIndex  = busExp / 3;
+      busOffset = busExp % 3;
+      if (busOffset > 0) { busIndex++; busOffset = 3 - busOffset; }
+    }
+    // prefixMap: Arduino-Index (0=p,1=n,2=u,3=m,4=none,5=k,6=M)
+    //         -> Protokoll  (0x01=p,0x02=n,0x03=u,0x04=m,0x00=none,0x05=k,0x06=M)
+    static const uint8_t prefixMap[7] = {0x01,0x02,0x03,0x04,0x00,0x05,0x06};
+    uint8_t protocolPrefix = (busIndex <= 6) ? prefixMap[busIndex] : 0x00;
+
+    uint8_t valID = 0x02 + (ValueCounter * 2);    // VAL1_LO=0x02, VAL2_LO=0x04, ...
+    if (valID <= 0x08) {
+      sendToEspReliable(0x0B, (protocolPrefix & 0x0F) | (busOffset << 4)); // UNIT_SCALE
+      sendToEspReliable(valID,     (uint8_t)(busVal & 0xFF));              // LO
+      sendToEspReliable(valID + 1, (uint8_t)((busVal >> 8) & 0xFF));       // HI
+      ValueCounter++;
+    }
+  }
+#endif
   unsigned char               Prefix = 0;        //Prefix character
   byte                        Offset = 0;        //Exponent offset to next 10^3 step
   byte                        Index;             //Index ID
@@ -3429,6 +3909,9 @@ void ShowFail(void)
 //Show Error                                     //Only for Standalone Version!
 void ShowError()
 {
+  #ifdef FOR_BRUTZELBOY
+    ValueCounter = 0;                             // kein reportComponent() vor ShowError
+  #endif
   if (Check.Type == TYPE_DISCHARGE)              //Discharge failed
   {
     lcd_fixed_string(DischargeFailed_str);       //Display: Battery?
@@ -4031,17 +4514,17 @@ byte SelfTest(void)
           lcd_fixed_string(ProbeComb_str);       //Display: 12 13 23
           //Set up a voltage divider with the Rl's, substract theoretical voltage of voltage divider
           //TP1: Gnd -- Rl -- probe-2 -- probe-1 -- Rl -- Vcc
-          R_PORT = 1 << (TP1 * 2);
-          R_DDR = (1 << (TP1 * 2)) | (1 << (TP2 * 2));
+          R_PORT = RL_MASK(TP1);
+          R_DDR = RL_MASK(TP1) | RL_MASK(TP2);
           Val1 = ReadU_20ms(TP3);
           Val1 -= ((long)UREF_VCC * (R_MCU_LOW + R_LOW)) / (R_MCU_LOW + R_LOW + R_LOW + R_MCU_HIGH);
           //TP1: Gnd -- Rl -- probe-3 -- probe-1 -- Rl -- Vcc
-          R_DDR = (1 << (TP1 * 2)) | (1 << (TP3 * 2));
+          R_DDR = RL_MASK(TP1) | RL_MASK(TP3);
           Val2 = ReadU_20ms(TP2);
           Val2 -= ((long)UREF_VCC * (R_MCU_LOW + R_LOW)) / (R_MCU_LOW + R_LOW + R_LOW + R_MCU_HIGH);
           //TP1: Gnd -- Rl -- probe-3 -- probe-2 -- Rl -- Vcc 
-          R_PORT = 1 << (TP2 * 2);
-          R_DDR = (1 << (TP2 * 2)) | (1 << (TP3 * 2));
+          R_PORT = RL_MASK(TP2);
+          R_DDR = RL_MASK(TP2) | RL_MASK(TP3);
           Val3 = ReadU_20ms(TP2);
           Val3 -= ((long)UREF_VCC * (R_MCU_LOW + R_LOW)) / (R_MCU_LOW + R_LOW + R_LOW + R_MCU_HIGH);
           break;
@@ -4051,17 +4534,17 @@ byte SelfTest(void)
           lcd_fixed_string(ProbeComb_str);       //Display: 12 13 23
           //Set up a voltage divider with the Rh's
           //TP1: Gnd -- Rh -- probe-2 -- probe-1 -- Rh -- Vcc
-          R_PORT = 2 << (TP1 * 2);
-          R_DDR = (2 << (TP1 * 2)) | (2 << (TP2 * 2));
+          R_PORT = RH_MASK(TP1);
+          R_DDR = RH_MASK(TP1) | RH_MASK(TP2);
           Val1 = ReadU_20ms(TP3);
           Val1 -= (UREF_VCC / 2);
           //TP1: Gnd -- Rh -- probe-3 -- probe-1 -- Rh -- Vcc
-          R_DDR = (2 << (TP1 * 2)) | (2 << (TP3 * 2));
+          R_DDR = RH_MASK(TP1) | RH_MASK(TP3);
           Val2 = ReadU_20ms(TP2);
           Val2 -= (UREF_VCC / 2);
           //TP1: Gnd -- Rh -- probe-3 -- probe-2 -- Rh -- Vcc
-          R_PORT = 2 << (TP2 * 2);
-          R_DDR = (2 << (TP2 * 2)) | (2 << (TP3 * 2));
+          R_PORT = RH_MASK(TP2);
+          R_DDR = RH_MASK(TP2) | RH_MASK(TP3);
           Val3 = ReadU_20ms(TP1);
           Val3 -= (UREF_VCC / 2);
           break;
@@ -4074,28 +4557,28 @@ byte SelfTest(void)
           lcd_fixed_string(RhLow_str);           //Display: Rh- 
           //TP1: Gnd -- Rh -- probe 
           R_PORT = 0;
-          R_DDR = 2 << (TP1 * 2);
+          R_DDR = RH_MASK(TP1);
           Val1 = ReadU_20ms(TP1);
           //TP1: Gnd -- Rh -- probe 
-          R_DDR = 2 << (TP2 * 2);
+          R_DDR = RH_MASK(TP2);
           Val2 = ReadU_20ms(TP2);
           //TP1: Gnd -- Rh -- probe 
-          R_DDR = 2 << (TP3 * 2);
+          R_DDR = RH_MASK(TP3);
           Val3 = ReadU_20ms(TP3);
           break;
         case 6:                                  //Rh resistors pulled up 
           lcd_fixed_string(RhHigh_str);          //Display: Rh+ 
           //TP1: probe -- Rh -- Vcc 
-          R_DDR = 2 << (TP1 * 2);
-          R_PORT = 2 << (TP1 * 2);
+          R_DDR = RH_MASK(TP1);
+          R_PORT = RH_MASK(TP1);
           Val1 = ReadU_20ms(TP1);
           //TP1: probe -- Rh -- Vcc 
-          R_DDR = 2 << (TP2 * 2);
-          R_PORT = 2 << (TP2 * 2);
+          R_DDR = RH_MASK(TP2);
+          R_PORT = RH_MASK(TP2);
           Val2 = ReadU_20ms(TP2);
           //TP1: probe -- Rh -- Vcc 
-          R_DDR = 2 << (TP3 * 2);
-          R_PORT = 2 << (TP3 * 2);
+          R_DDR = RH_MASK(TP3);
+          R_PORT = RH_MASK(TP3);
           Val3 = ReadU_20ms(TP3);
           break;
       }
@@ -4208,20 +4691,20 @@ byte SelfAdjust(void)
           //TP1:  Gnd -- Ri -- probe -- Rl -- Ri -- Vcc
           SetADCLow();
           ADC_DDR = 1 << TP1;
-          R_PORT = 1 << (TP1 * 2);
-          R_DDR = 1 << (TP1 * 2);
+          R_PORT = RL_MASK(TP1);
+          R_DDR = RL_MASK(TP1);
           Val1 = ReadU_5ms(TP1);
           U_RiL += Val1;
           //TP2: Gnd -- Ri -- probe -- Rl -- Ri -- Vcc 
           ADC_DDR = 1 << TP2;
-          R_PORT =  1 << (TP2 * 2);
-          R_DDR = 1 << (TP2 * 2);
+          R_PORT = RL_MASK(TP2);
+          R_DDR = RL_MASK(TP2);
           Val2 = ReadU_5ms(TP2);
           U_RiL += Val2;
           //TP3: Gnd -- Ri -- probe -- Rl -- Ri -- Vcc 
           ADC_DDR = 1 << TP3;
-          R_PORT =  1 << (TP3 * 2);
-          R_DDR = 1 << (TP3 * 2);
+          R_PORT = RL_MASK(TP3);
+          R_DDR = RL_MASK(TP3);
           Val3 = ReadU_5ms(TP3);
           U_RiL += Val3;
           RiL_Counter += 3;
@@ -4232,19 +4715,19 @@ byte SelfAdjust(void)
           R_PORT = 0;
           ADC_PORT = 1 << TP1;
           ADC_DDR = 1 << TP1;
-          R_DDR = 1 << (TP1 * 2);
+          R_DDR = RL_MASK(TP1);
           Val1 = UREF_VCC - ReadU_5ms(TP1);
           U_RiH += Val1;
           //TP2: Gnd -- Ri -- Rl -- probe -- Ri -- Vcc
           ADC_PORT = 1 << TP2;
           ADC_DDR = 1 << TP2;
-          R_DDR = 1 << (TP2 * 2);
+          R_DDR = RL_MASK(TP2);
           Val2 = UREF_VCC - ReadU_5ms(TP2);
           U_RiH += Val2;
           //TP3: Gnd -- Ri -- Rl -- probe -- Ri -- Vcc
           ADC_PORT = 1 << TP3;
           ADC_DDR = 1 << TP3;
-          R_DDR = 1 << (TP3 * 2);
+          R_DDR = RL_MASK(TP3);
           Val3 = UREF_VCC - ReadU_5ms(TP3);
           U_RiH += Val3;
           RiH_Counter += 3;
@@ -4441,7 +4924,7 @@ void PWM_Tool(unsigned int Frequency)
   lcd_data('z');                                 //Make it Hz :-) 
   R_PORT = 0;                                    //Make probe #1 and #3 ground
   //Set all probes to output mode
-  R_DDR = (1 << (TP1 * 2)) | (1 << (TP2 * 2)) | (1 << (TP3 * 2));
+  R_DDR = RL_MASK(TP1) | RL_MASK(TP2) | RL_MASK(TP3);
   //Calculate required prescaler and top value based on MCU clock, depth = f_MCU / (2 * prescaler * f_PWM)
   Value = CPU_FREQ / 2;
   Value /= Frequency;

@@ -1,0 +1,112 @@
+Perfekt! Ich habe dir ein **kompaktes Minipro 0.7.4 Cheatsheet** erstellt. Es ist als Markdown formatiert und übersichtlich nach Funktion gegliedert, so dass du es direkt speichern oder ausdrucken kannst.
+
+---
+
+# **Minipro 0.7.4 Cheatsheet**
+
+## **1️⃣ Grundbefehle**
+
+| Befehl                   | Beschreibung                                        |
+| ------------------------ | --------------------------------------------------- |
+| `minipro -p <DEVICE>`    | Wähle das Zielgerät, z. B. `ATMEGA328P`             |
+| `-n`                     | Prüft, ob der Chip korrekt erkannt wird             |
+| `-l`, `--list`           | Zeigt alle unterstützten Geräte                     |
+| `-L <Suchbegriff>`       | Suche Geräte nach Namen                             |
+| `-v`, `--version`        | Zeigt Version von Minipro                           |
+| `-h`, `--help`           | Zeigt Hilfe / Übersicht aller Optionen              |
+| `-k`, `--presence_check` | Prüft, welche Programmer aktuell angeschlossen sind |
+| `-q <Programmer>`        | Erzwingt Programmer-Version (z. B. TL866II+)        |
+
+---
+
+## **2️⃣ Lesen & Schreiben**
+
+| Befehl                | Beschreibung                                                           |
+| --------------------- | ---------------------------------------------------------------------- |
+| `-r <Datei>`          | Chip auslesen (Flash/Data/EEPROM), speichern in Datei                  |
+| `-w <Datei>`          | Chip schreiben aus Datei                                               |
+| `-m <Datei>`          | Verifizieren: Datei mit Chipinhalt vergleichen                         |
+| `-c <type>`           | Speicherart auswählen: `code`, `data`, `config`, `user`, `calibration` |
+| `-b`, `--blank_check` | Prüft, ob Speicher leer ist                                            |
+| `-e`, `--erase`       | Löscht den gesamten Chip (Chip Erase)                                  |
+
+---
+
+## **3️⃣ Fuse-Operationen (AVR/MCU)**
+
+| Befehl          | Beschreibung                         |
+| --------------- | ------------------------------------ |
+| `-r lfuse.bin`  | Low Fuse auslesen                    |
+| `-r hfuse.bin`  | High Fuse auslesen                   |
+| `-r efuse.bin`  | Extended Fuse auslesen               |
+| `-w lfuse:0xXX` | Low Fuse setzen                      |
+| `-w hfuse:0xXX` | High Fuse setzen                     |
+| `-w efuse:0xXX` | Extended Fuse setzen                 |
+| `-c fuse`       | Fuse-Check / Anzeige aktueller Werte |
+
+---
+
+## **4️⃣ EEPROM**
+
+| Befehl          | Beschreibung                                        |
+| --------------- | --------------------------------------------------- |
+| `-r eeprom.bin` | EEPROM auslesen                                     |
+| `-w eeprom.bin` | EEPROM schreiben                                    |
+| `-e`            | Chip löschen löscht auch EEPROM (abhängig vom Chip) |
+
+---
+
+## **5️⃣ Schutz & Optionen**
+
+| Option                    | Beschreibung                                      |
+| ------------------------- | ------------------------------------------------- |
+| `-u`, `--unprotect`       | Deaktiviert Schreibschutz                         |
+| `-P`, `--protect`         | Aktiviert Schreibschutz                           |
+| `-v`, `--skip_verify`     | Verifikation nach Schreiben überspringen          |
+| `-s`, `--no_size_error`   | Ignoriere Dateigrößen-Mismatch als Fehler         |
+| `-S`, `--no_size_warning` | Unterdrücke Warnungen bei Dateigröße              |
+| `-x`, `--skip_id`         | Prüfe nicht Chip-ID vor Lesen/Schreiben           |
+| `-y`, `--no_id_error`     | Ignoriere Chip-ID Fehler                          |
+| `-o vpp=<val>`            | Programmierpuls-Spannung manuell einstellen       |
+| `-o vcc=<val>`            | Versorgungsspannung Vcc einstellen                |
+| `-o pulse=<val>`          | Programmierpulszeit in µs einstellen              |
+| `-o speed=<val>`          | Programmer-Takt einstellen (für bestimmte Geräte) |
+
+---
+
+## **6️⃣ ICSP / Logik**
+
+| Befehl                | Beschreibung                                  |
+| --------------------- | --------------------------------------------- |
+| `-i`, `--icsp_vcc`    | ICSP-Modus mit Vcc von Programmer             |
+| `-I`, `--icsp_no_vcc` | ICSP-Modus ohne Vcc vom Programmer            |
+| `-T`, `--logic_test`  | Testmodus für Logik-ICs (Pin-Zustände prüfen) |
+
+---
+
+## **7️⃣ Nützliche Befehls-Kombinationen**
+
+**ATmega328P Flash + Fuses schreiben:**
+
+```bash
+minipro -p ATMEGA328P -w flash.hex
+minipro -p ATMEGA328P -w lfuse:0xFF
+minipro -p ATMEGA328P -w hfuse:0xDE
+minipro -p ATMEGA328P -w efuse:0xFD
+```
+
+**Chip auslesen:**
+
+```bash
+minipro -p ATMEGA328P -r flash.bin -c code
+minipro -p ATMEGA328P -r eeprom.bin -c data
+minipro -p ATMEGA328P -r fuse.bin -c fuse
+```
+
+**Chip prüfen ohne Schreibvorgang:**
+
+```bash
+minipro -p ATMEGA328P -b -c code
+```
+
+---

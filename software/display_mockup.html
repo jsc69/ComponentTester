@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>BrutzelBoy Display Mockup – Landscape 284×240</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0a0a0f;background-image:radial-gradient(ellipse at 20% 50%,#0d1a2e 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#1a0d2e 0%,transparent 60%);min-height:100vh;display:flex;flex-direction:column;align-items:center;font-family:'Share Tech Mono',monospace;padding:32px 20px;gap:24px}
+  h1{font-family:'Orbitron',sans-serif;color:#00e5ff;font-size:12px;letter-spacing:6px;text-transform:uppercase;opacity:.7}
+  /* ── GBC-Gehäuse via SVG ── */
+  .gbc-wrap{position:relative;display:inline-block}
+  .gbc-svg{display:block;overflow:visible;filter:drop-shadow(0 16px 48px rgba(0,0,0,.85))}
+  /* Display-Canvas ins SVG eingebettet */
+  .display{width:284px;height:240px;background:#000;border-radius:2px;overflow:hidden;position:relative}
+  .display::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.06) 2px,rgba(0,0,0,.06) 4px);pointer-events:none;z-index:100}
+  .nav{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;max-width:700px}
+  .nav button{background:#111120;border:1px solid #2a2a4a;color:#7070a0;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 10px;border-radius:4px;cursor:pointer;transition:all .15s;letter-spacing:1px}
+  .nav button:hover{background:#1a1a30;color:#c0c0f0;border-color:#4a4a7a}
+  .nav button.active{color:#00e5ff;background:rgba(0,229,255,.06);border-color:#00e5ff}
+  .gallery{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:900px}
+  .mini-card{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+  .mini-wrap{width:142px;height:120px;background:#000;border:1px solid #1a1a2e;border-radius:2px;overflow:hidden;position:relative;transition:border-color .15s,transform .15s}
+  .mini-wrap:hover{border-color:#3a3a5a;transform:scale(1.05)}
+  .mini-wrap::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.1) 2px,rgba(0,0,0,.1) 4px);pointer-events:none;z-index:10}
+  .mini-label{font-size:8px;color:#3a3a5a;letter-spacing:2px;text-transform:uppercase}
+  .layout-note{font-size:9px;color:#2a3a4a;letter-spacing:2px;text-transform:uppercase;margin-top:4px}
+</style>
+</head>
+<body>
+<h1>BrutzelBoy · ArduTester · Landscape 284×240</h1>
+
+<div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap;justify-content:center">
+<div style="display:flex;flex-direction:column;align-items:center;gap:0">
+
+  <!-- GBC-Gehäuse als SVG mit eingebettetem Canvas -->
+  <div class="gbc-wrap">
+  <svg class="gbc-svg" width="500" height="620" viewBox="0 0 500 620" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- Gehäuse-Gradient: typisches GBC-Lila/Violett -->
+      <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%"   stop-color="#9b6bbe"/>
+        <stop offset="45%"  stop-color="#7a4ea0"/>
+        <stop offset="100%" stop-color="#5c3880"/>
+      </linearGradient>
+      <!-- Seitliche Abdunklungen -->
+      <linearGradient id="sideL" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(0,0,0,.35)"/>
+        <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+      </linearGradient>
+      <linearGradient id="sideR" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(0,0,0,0)"/>
+        <stop offset="100%" stop-color="rgba(0,0,0,.35)"/>
+      </linearGradient>
+      <!-- Glanz oben -->
+      <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stop-color="rgba(255,255,255,.28)"/>
+        <stop offset="40%" stop-color="rgba(255,255,255,.04)"/>
+        <stop offset="100%" stop-color="rgba(0,0,0,.1)"/>
+      </linearGradient>
+      <!-- Bezel-Gradient dunkelgrau -->
+      <linearGradient id="bezelGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="#555"/>
+        <stop offset="100%" stop-color="#2a2a2a"/>
+      </linearGradient>
+      <!-- Knopf-Gradient -->
+      <radialGradient id="btnRed" cx="35%" cy="30%">
+        <stop offset="0%" stop-color="#ff7070"/>
+        <stop offset="100%" stop-color="#cc1111"/>
+      </radialGradient>
+      <radialGradient id="btnBlue" cx="35%" cy="30%">
+        <stop offset="0%" stop-color="#6699ff"/>
+        <stop offset="100%" stop-color="#1133cc"/>
+      </radialGradient>
+      <radialGradient id="btnDpad" cx="35%" cy="30%">
+        <stop offset="0%" stop-color="#444"/>
+        <stop offset="100%" stop-color="#111"/>
+      </radialGradient>
+      <radialGradient id="btnSS" cx="35%" cy="30%">
+        <stop offset="0%" stop-color="#777"/>
+        <stop offset="100%" stop-color="#333"/>
+      </radialGradient>
+      <filter id="inset" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,.6)"/>
+      </filter>
+    </defs>
+
+    <!-- ══ Gehäuse-Körper ══ -->
+    <!-- GBC-Form: oben abgerundete Schultern, unten rundere Ecken, schmäler oben -->
+    <!-- Hauptform: oben breiter (Schultern), unten schmäler (Griff-Bereich fehlt beim GBC) -->
+    <path d="
+      M 60,30
+      Q 60,10 80,10
+      L 420,10
+      Q 440,10 440,30
+      L 440,530
+      Q 440,560 410,570
+      L 340,580
+      Q 250,590 160,580
+      L 90,570
+      Q 60,560 60,530
+      Z
+    " fill="url(#bodyGrad)"/>
+
+    <!-- Seitenglanz links -->
+    <path d="M60,30 Q60,10 80,10 L 80,580 Q60,560 60,530 Z" fill="url(#sideL)" opacity=".5"/>
+    <!-- Seitenglanz rechts -->
+    <path d="M440,30 Q440,10 420,10 L 420,580 Q440,560 440,530 Z" fill="url(#sideR)" opacity=".5"/>
+    <!-- Glanz oben -->
+    <path d="M80,10 L420,10 Q440,10 440,30 L440,120 Q250,90 60,120 L60,30 Q60,10 80,10 Z" fill="url(#shine)"/>
+
+    <!-- Gehäuse-Rand/Outline -->
+    <path d="
+      M 60,30 Q 60,10 80,10 L 420,10 Q 440,10 440,30
+      L 440,530 Q 440,560 410,570 L 340,580
+      Q 250,590 160,580 L 90,570 Q 60,560 60,530 Z
+    " fill="none" stroke="rgba(0,0,0,.4)" stroke-width="1.5"/>
+
+    <!-- ══ Display-Bezel (dunkelgrau, vertieft) ══ -->
+    <rect x="74" y="28" width="352" height="330" rx="10" fill="url(#bezelGrad)"
+          filter="url(#inset)"/>
+    <!-- Inset-Shadow Effekt -->
+    <rect x="74" y="28" width="352" height="330" rx="10"
+          fill="none" stroke="rgba(0,0,0,.7)" stroke-width="2"/>
+    <rect x="75" y="29" width="350" height="328" rx="9"
+          fill="none" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+
+    <!-- ══ Display-Fenster (schwarzer Ring + Canvas) ══ -->
+    <!-- Äußerer schwarzer Ring -->
+    <rect x="96" y="42" width="308" height="268" rx="5" fill="#0a0a0a"/>
+    <!-- Canvas einbetten -->
+    <foreignObject x="104" y="50" width="284" height="240">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div class="display"><canvas id="main" width="284" height="240"></canvas></div>
+      </div>
+    </foreignObject>
+    <!-- Reflexions-Overlay auf Display -->
+    <rect x="96" y="42" width="308" height="268" rx="5"
+          fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1"/>
+    <path d="M100,46 L130,46 Q134,46 134,50 L134,80 Q100,70 100,46 Z"
+          fill="rgba(255,255,255,.06)"/>
+
+    <!-- ══ "BrutzelBoy COLOR" Schriftzug ══ -->
+    <!-- Hellgrauer "BrutzelBoy"-Text -->
+    <text x="250" y="328" text-anchor="middle"
+          font-family="Orbitron,sans-serif" font-size="13" font-weight="700"
+          letter-spacing="2" fill="#c0c0c8"
+          style="text-shadow:none">BrutzelBoy
+    </text>
+    <!-- Bunter "COLOR"-Text, Buchstaben einzeln gefärbt -->
+    <text x="250" y="344" text-anchor="middle"
+          font-family="Orbitron,sans-serif" font-size="13" font-weight="700"
+          letter-spacing="3">
+      <tspan fill="#ff3a3a">C</tspan><tspan fill="#ffcc00">O</tspan><tspan fill="#33dd55">L</tspan><tspan fill="#3399ff">O</tspan><tspan fill="#ff3a3a">R</tspan>
+    </text>
+
+    <!-- ══ D-Pad (links) ══ -->
+    <g transform="translate(118, 430)">
+      <!-- Kreuz -->
+      <rect x="-8" y="-26" width="16" height="52" rx="3" fill="url(#btnDpad)"/>
+      <rect x="-26" y="-8" width="52" height="16" rx="3" fill="url(#btnDpad)"/>
+      <!-- Mittelkreis -->
+      <circle cx="0" cy="0" r="8" fill="#1a1a1a"/>
+      <!-- Pfeilmarkierungen -->
+      <polygon points="0,-20 -4,-13 4,-13" fill="#555"/>
+      <polygon points="0,20 -4,13 4,13"   fill="#555"/>
+      <polygon points="-20,0 -13,-4 -13,4" fill="#555"/>
+      <polygon points="20,0 13,-4 13,4"   fill="#555"/>
+    </g>
+
+    <!-- ══ A/B-Knöpfe (rechts) ══ -->
+    <!-- B (links, unten) -->
+    <circle cx="348" cy="455" r="16" fill="url(#btnRed)"/>
+    <text x="348" y="460" text-anchor="middle" font-family="Orbitron,sans-serif"
+          font-size="11" font-weight="700" fill="white" opacity=".9">B</text>
+    <!-- A (rechts, oben) -->
+    <circle cx="388" cy="425" r="16" fill="url(#btnBlue)"/>
+    <text x="388" y="430" text-anchor="middle" font-family="Orbitron,sans-serif"
+          font-size="11" font-weight="700" fill="white" opacity=".9">A</text>
+    <!-- Beschriftung neben Knöpfen -->
+    <text x="336" y="478" font-family="Orbitron,sans-serif" font-size="7"
+          fill="#c0a0e0" letter-spacing="1" text-anchor="middle">B</text>
+    <text x="400" y="410" font-family="Orbitron,sans-serif" font-size="7"
+          fill="#c0a0e0" letter-spacing="1" text-anchor="middle">A</text>
+
+    <!-- ══ Select / Start ══ -->
+    <!-- SELECT -->
+    <rect x="185" y="462" width="36" height="10" rx="5" fill="url(#btnSS)"/>
+    <text x="203" y="477" text-anchor="middle" font-family="Orbitron,sans-serif"
+          font-size="6.5" fill="#c0a0e0" letter-spacing=".5">SELECT</text>
+    <!-- START -->
+    <rect x="279" y="462" width="36" height="10" rx="5" fill="url(#btnSS)"/>
+    <text x="297" y="477" text-anchor="middle" font-family="Orbitron,sans-serif"
+          font-size="6.5" fill="#c0a0e0" letter-spacing=".5">START</text>
+
+    <!-- ══ Speaker-Gitter (rechts unten) ══ -->
+    <g opacity=".5">
+      <line x1="390" y1="500" x2="390" y2="540" stroke="#3a2a50" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="400" y1="497" x2="400" y2="543" stroke="#3a2a50" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="410" y1="500" x2="410" y2="540" stroke="#3a2a50" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="420" y1="503" x2="420" y2="537" stroke="#3a2a50" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="430" y1="508" x2="430" y2="532" stroke="#3a2a50" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+
+    <!-- ══ Power-LED (oben rechts) ══ -->
+    <circle cx="430" cy="22" r="4" fill="#33ff44"/>
+    <circle cx="430" cy="22" r="4" fill="none" stroke="rgba(0,200,0,.3)" stroke-width="4" opacity=".6"/>
+  </svg>
+  </div><!-- end gbc-wrap -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:16px">
+  <div class="nav">
+      <button class="active" onclick="show('idle',this)">Idle</button>
+      <button onclick="show('busy',this)">Messe…</button>
+      <button onclick="show('npn',this)">NPN</button>
+      <button onclick="show('pnp',this)">PNP</button>
+      <button onclick="show('nmosfet',this)">N-FET</button>
+      <button onclick="show('pmosfet',this)">P-FET</button>
+      <button onclick="show('njfet',this)">N-JFET</button>
+      <button onclick="show('resistor',this)">R</button>
+      <button onclick="show('capacitor',this)">C</button>
+      <button onclick="show('inductor',this)">L</button>
+      <button onclick="show('diode',this)">Diode</button>
+      <button onclick="show('thyristor',this)">Thyr.</button>
+      <button onclick="show('triac',this)">Triac</button>
+      <button onclick="show('error',this)">Fehler</button>
+    </div><!-- end nav -->
+  </div><!-- end nav+gbc column -->
+
+  <!-- Galerie -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+    <div style="font-size:9px;color:#3a3a5a;letter-spacing:3px;text-transform:uppercase">Alle Screens</div>
+    <div class="gallery" id="gallery"></div>
+  </div>
+</div>
+
+<script>
+// ── Layout-Konstanten (spiegeln die #defines im .ino) ────────────
+const W=284, H=240, HDR=26, SYM_W=140, VAL_X=148, VAL_V=190;
+
+// ── Farben ───────────────────────────────────────────────────────
+const C={
+  bg:'#000',label:'#4a4a6a',value:'#dde0f0',
+  npn:'#22bbff',pnp:'#ff8833',nfet:'#33ee55',pfet:'#ee44ff',
+  passive:'#99aabb',diode:'#ffcc22',warn:'#ccaa00',error:'#cc2200',
+  sep:'#282838',footer:'#111120',line:'rgba(255,255,255,0.04)',
+};
+const HDR_COL={
+  npn:'#005f99',pnp:'#994400',nmosfet:'#005522',pmosfet:'#550066',
+  njfet:'#004422',pjfet:'#440055',resistor:'#223344',capacitor:'#223344',
+  inductor:'#223344',diode:'#553300',thyristor:'#553300',triac:'#553300',
+  error:'#770000',busy:'#776600',idle:'#0c0c18',
+};
+
+// ── Canvas-Helfer ────────────────────────────────────────────────
+function clr(ctx){ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H)}
+
+function header(ctx,title,col,batt){
+  ctx.fillStyle=col; ctx.fillRect(0,0,W,HDR);
+  ctx.fillStyle='rgba(0,0,0,.6)'; ctx.font='bold 11px monospace';
+  ctx.textAlign='left'; ctx.fillText(title,5,18);
+  if(batt){ctx.font='7px monospace';ctx.textAlign='right';ctx.fillText(batt,W-4,17);}
+  // Trennlinie Symbol | Werte
+  ctx.strokeStyle=C.sep; ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(SYM_W,HDR);ctx.lineTo(SYM_W,H);ctx.stroke();
+  ctx.textAlign='left';
+}
+
+function valRow(ctx,y,lbl,val,vc){
+  ctx.font='8px monospace';
+  ctx.fillStyle=C.label; ctx.fillText(lbl,VAL_X,y);
+  ctx.fillStyle=vc||C.value; ctx.fillText(val,VAL_V,y);
+  ctx.strokeStyle=C.line; ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(VAL_X,y+7);ctx.lineTo(W,y+7);ctx.stroke();
+}
+
+function footer(ctx,batt){
+  const fy=H-10;
+  ctx.strokeStyle=C.label; ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(VAL_X,fy-3);ctx.lineTo(W,fy-3);ctx.stroke();
+  ctx.font='7px monospace'; ctx.fillStyle=C.label;
+  ctx.fillText('Batt: '+batt, VAL_X, fy+1);
+}
+
+function pl(ctx,x,y,tp,role,col,right){
+  const s=`${role}(T${tp})`;
+  ctx.font='7px monospace'; ctx.fillStyle=col;
+  ctx.textAlign=right?'right':'left';
+  ctx.fillText(s, right?x:x+2, y+3);
+  ctx.textAlign='left';
+}
+
+// ── Linien-Helfer ────────────────────────────────────────────────
+function ln(ctx,c,x1,y1,x2,y2){ctx.strokeStyle=c;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+function hl(ctx,c,x,y,w){ctx.fillStyle=c;ctx.fillRect(x,y,w,1)}
+function vl(ctx,c,x,y,h){ctx.fillStyle=c;ctx.fillRect(x,y,1,h)}
+function tri(ctx,c,x0,y0,x1,y1,x2,y2,fill){
+  ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.lineTo(x2,y2);ctx.closePath();
+  if(fill){ctx.fillStyle=c;ctx.fill();}
+  ctx.strokeStyle=c;ctx.stroke();
+}
+
+// ── Schaltsymbole ────────────────────────────────────────────────
+function symBJT(ctx,cx,cy,isNPN,b,c,e,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.arc(cx,cy,24,0,Math.PI*2);ctx.stroke();
+  vl(ctx,col,cx-24,cy-11,22);
+  hl(ctx,col,cx-38,cy,14); hl(ctx,col,cx-24,cy-11,14); hl(ctx,col,cx-24,cy+11,14);
+  ln(ctx,col,cx-10,cy-11,cx+16,cy-27); ln(ctx,col,cx-10,cy+11,cx+16,cy+27);
+  ctx.fillStyle=col;
+  if(isNPN) tri(ctx,col,cx+16,cy+27,cx+8,cy+18,cx+18,cy+19,true);
+  else      tri(ctx,col,cx-10,cy+11,cx-2,cy+20,cx-2,cy+8,true);
+  pl(ctx,cx-38,cy,b,'B',col,true); pl(ctx,cx+17,cy-28,c,'C',col,false); pl(ctx,cx+17,cy+28,e,'E',col,false);
+}
+
+function symMOSFET(ctx,cx,cy,isN,isEnh,g,d,s,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  hl(ctx,col,cx-36,cy,16); vl(ctx,col,cx-20,cy-18,36);
+  if(isEnh){vl(ctx,col,cx-13,cy-18,9);vl(ctx,col,cx-13,cy-4,8);vl(ctx,col,cx-13,cy+9,9);}
+  else vl(ctx,col,cx-13,cy-18,36);
+  hl(ctx,col,cx-13,cy-13,30); hl(ctx,col,cx-13,cy+13,30);
+  vl(ctx,col,cx+17,cy-24,11); vl(ctx,col,cx+17,cy+13,11);
+  ctx.fillStyle=col;
+  if(isN) tri(ctx,col,cx-7,cy,cx-14,cy-4,cx-14,cy+4,true);
+  else    tri(ctx,col,cx-14,cy,cx-7,cy-4,cx-7,cy+4,true);
+  vl(ctx,col,cx-14,cy,13);
+  pl(ctx,cx-36,cy,g,'G',col,true); pl(ctx,cx+19,cy-26,d,'D',col,false); pl(ctx,cx+19,cy+26,s,'S',col,false);
+}
+
+function symJFET(ctx,cx,cy,isN,g,d,s,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  vl(ctx,col,cx-5,cy-22,44); hl(ctx,col,cx-22,cy,17);
+  ctx.fillStyle=col;
+  if(isN) tri(ctx,col,cx-5,cy,cx-13,cy-4,cx-13,cy+4,true);
+  else    tri(ctx,col,cx-14,cy,cx-6,cy-4,cx-6,cy+4,true);
+  hl(ctx,col,cx-5,cy-14,24); vl(ctx,col,cx+19,cy-24,10);
+  hl(ctx,col,cx-5,cy+14,24); vl(ctx,col,cx+19,cy+14,10);
+  pl(ctx,cx-22,cy,g,'G',col,true); pl(ctx,cx+21,cy-26,d,'D',col,false); pl(ctx,cx+21,cy+26,s,'S',col,false);
+}
+
+function symR(ctx,cx,cy,t1,t2,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  hl(ctx,col,cx-40,cy,20); hl(ctx,col,cx+20,cy,20);
+  ctx.strokeRect(cx-20,cy-9,40,18);
+  ctx.font='7px monospace'; ctx.fillStyle=col;
+  ctx.textAlign='right'; ctx.fillText(`T${t1}`,cx-42,cy+3);
+  ctx.textAlign='left';  ctx.fillText(`T${t2}`,cx+42,cy+3);
+  ctx.textAlign='left';
+}
+
+function symC(ctx,cx,cy,t1,t2,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  hl(ctx,col,cx-36,cy,30); hl(ctx,col,cx+6,cy,30);
+  vl(ctx,col,cx-6,cy-15,30); vl(ctx,col,cx+6,cy-15,30);
+  ctx.font='7px monospace'; ctx.fillStyle=col;
+  ctx.textAlign='right'; ctx.fillText(`T${t1}`,cx-38,cy+3);
+  ctx.textAlign='left';  ctx.fillText(`T${t2}`,cx+38,cy+3);
+  ctx.textAlign='left';
+}
+
+function symL(ctx,cx,cy,t1,t2,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  hl(ctx,col,cx-40,cy,16); hl(ctx,col,cx+24,cy,16);
+  for(let i=0;i<4;i++){
+    const bx=cx-24+i*12;
+    for(let a=0;a<=160;a+=20){
+      const r1=a*Math.PI/180+Math.PI,r2=(a+20)*Math.PI/180+Math.PI;
+      ln(ctx,col,bx+6+6*Math.cos(r1),cy-6*Math.sin(r1),bx+6+6*Math.cos(r2),cy-6*Math.sin(r2));
+    }
+  }
+  ctx.font='7px monospace'; ctx.fillStyle=col;
+  ctx.textAlign='right'; ctx.fillText(`T${t1}`,cx-42,cy+3);
+  ctx.textAlign='left';  ctx.fillText(`T${t2}`,cx+42,cy+3);
+  ctx.textAlign='left';
+}
+
+function symDiode(ctx,cx,cy,a,k,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  hl(ctx,col,cx-40,cy,28); hl(ctx,col,cx+12,cy,28);
+  ctx.fillStyle=col;
+  tri(ctx,col,cx-12,cy-13,cx-12,cy+13,cx+12,cy,true);
+  vl(ctx,col,cx+12,cy-13,26);
+  pl(ctx,cx-40,cy,a,'A',col,true); pl(ctx,cx+40,cy,k,'K',col,false);
+}
+
+function symThyristor(ctx,cx,cy,a,k,g,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  vl(ctx,col,cx,cy-40,26); vl(ctx,col,cx,cy+14,26);
+  ctx.fillStyle=col;
+  tri(ctx,col,cx-14,cy-14,cx+14,cy-14,cx,cy+14,true);
+  hl(ctx,col,cx-14,cy+14,28);
+  ln(ctx,col,cx+14,cy+14,cx+26,cy+26);
+  ctx.font='7px monospace'; ctx.fillStyle=col;
+  ctx.textAlign='center';
+  ctx.fillText(`A(T${a})`,cx,cy-46); ctx.fillText(`K(T${k})`,cx,cy+54);
+  ctx.textAlign='left'; ctx.fillText(`G(T${g})`,cx+28,cy+30);
+  ctx.textAlign='left';
+}
+
+function symTriac(ctx,cx,cy,mt2,mt1,g,col){
+  ctx.strokeStyle=col; ctx.lineWidth=1.3;
+  vl(ctx,col,cx,cy-40,26); vl(ctx,col,cx,cy+14,26);
+  ctx.fillStyle=col;
+  tri(ctx,col,cx-14,cy-14,cx+14,cy-14,cx,cy+14,true);
+  tri(ctx,col,cx-14,cy+14,cx+14,cy+14,cx,cy-14,true);
+  hl(ctx,col,cx-14,cy-14,28); hl(ctx,col,cx-14,cy+14,28);
+  ln(ctx,col,cx+14,cy,cx+26,cy+18);
+  ctx.font='7px monospace'; ctx.fillStyle=col;
+  ctx.textAlign='center';
+  ctx.fillText(`MT2(T${mt2})`,cx,cy-46); ctx.fillText(`MT1(T${mt1})`,cx,cy+54);
+  ctx.textAlign='left'; ctx.fillText(`G(T${g})`,cx+28,cy+22);
+  ctx.textAlign='left';
+}
+
+// ── Screen-Render-Funktionen ─────────────────────────────────────
+// Symbol-Mitte: cx=70, cy=133
+const SX=70, SY=133;
+
+const SCREENS = {
+  idle(ctx){
+    clr(ctx);
+    ctx.fillStyle=HDR_COL.idle; ctx.fillRect(0,0,W,HDR);
+    ctx.fillStyle='#2a2a4a'; ctx.font='bold 11px monospace';
+    ctx.fillText('ArduTester',5,18);
+    ctx.font='9px monospace'; ctx.fillStyle='#333355'; ctx.textAlign='center';
+    ctx.fillText('Bauteil einlegen',W/2,H/2-5);
+    ctx.fillText('und messen...',W/2,H/2+11);
+    ctx.textAlign='left';
+  },
+  busy(ctx,t){
+    clr(ctx); header(ctx,'Messe...',HDR_COL.busy,null); t=t||0;
+    for(let i=0;i<3;i++){
+      const a=0.15+0.85*Math.abs(Math.sin(t+i*0.9));
+      ctx.beginPath();ctx.arc(W/2-20+i*20,H/2,8,0,Math.PI*2);
+      ctx.fillStyle=`rgba(204,170,0,${a})`;ctx.fill();
+    }
+  },
+  npn(ctx){
+    clr(ctx); header(ctx,'NPN BJT',HDR_COL.npn,'3.91V');
+    symBJT(ctx,SX,SY,true,2,3,1,C.npn);
+    let y=HDR+10;
+    valRow(ctx,y,'hFE:','200',C.npn);    y+=18;
+    valRow(ctx,y,'Vbe:','650mV',C.npn);  y+=18;
+    footer(ctx,'3.91V');
+  },
+  pnp(ctx){
+    clr(ctx); header(ctx,'PNP BJT',HDR_COL.pnp,'3.88V');
+    symBJT(ctx,SX,SY,false,2,1,3,C.pnp);
+    let y=HDR+10;
+    valRow(ctx,y,'hFE:','120',C.pnp);    y+=18;
+    valRow(ctx,y,'Vbe:','612mV',C.pnp);  y+=18;
+    footer(ctx,'3.88V');
+  },
+  nmosfet(ctx){
+    clr(ctx); header(ctx,'N-E-MOSFET',HDR_COL.nmosfet,'3.90V');
+    symMOSFET(ctx,SX,SY,true,true,2,3,1,C.nfet);
+    let y=HDR+10;
+    valRow(ctx,y,'Vth:','2.14V',C.nfet); y+=18;
+    valRow(ctx,y,'Vgs:','3.30V',C.nfet); y+=18;
+    footer(ctx,'3.90V');
+  },
+  pmosfet(ctx){
+    clr(ctx); header(ctx,'P-E-MOSFET',HDR_COL.pmosfet,'3.90V');
+    symMOSFET(ctx,SX,SY,false,true,2,1,3,C.pfet);
+    let y=HDR+10;
+    valRow(ctx,y,'Vth:','3.85V',C.pfet); y+=18;
+    valRow(ctx,y,'Vgs:','4.10V',C.pfet); y+=18;
+    footer(ctx,'3.90V');
+  },
+  njfet(ctx){
+    clr(ctx); header(ctx,'N-JFET',HDR_COL.njfet,'3.91V');
+    symJFET(ctx,SX,SY,true,1,3,2,C.nfet);
+    let y=HDR+10;
+    valRow(ctx,y,'Vth:','-1.8V',C.nfet); y+=18;
+    valRow(ctx,y,'Idss:','8mA',C.nfet);  y+=18;
+    footer(ctx,'3.91V');
+  },
+  resistor(ctx){
+    clr(ctx); header(ctx,'Widerstand',HDR_COL.resistor,'3.91V');
+    symR(ctx,SX,SY,1,2,C.passive);
+    let y=HDR+10;
+    valRow(ctx,y,'R1:','4.70kOhm',C.passive); y+=18;
+    footer(ctx,'3.91V');
+  },
+  capacitor(ctx){
+    clr(ctx); header(ctx,'Kondensator',HDR_COL.capacitor,'3.89V');
+    symC(ctx,SX,SY,1,2,C.passive);
+    let y=HDR+10;
+    valRow(ctx,y,'C:','100nF',C.passive);    y+=18;
+    valRow(ctx,y,'ESR:','2.1Ohm',C.passive); y+=18;
+    valRow(ctx,y,'Vls:','0.8%',C.passive);   y+=18;
+    footer(ctx,'3.89V');
+  },
+  inductor(ctx){
+    clr(ctx); header(ctx,'Induktivität',HDR_COL.inductor,'3.90V');
+    symL(ctx,SX,SY,1,2,C.passive);
+    let y=HDR+10;
+    valRow(ctx,y,'L:','47µH',C.passive);    y+=18;
+    valRow(ctx,y,'R:','0.8Ohm',C.passive);  y+=18;
+    footer(ctx,'3.90V');
+  },
+  diode(ctx){
+    clr(ctx); header(ctx,'Diode',HDR_COL.diode,'3.91V');
+    symDiode(ctx,SX,SY,1,3,C.diode);
+    let y=HDR+10;
+    valRow(ctx,y,'Vf:','620mV',C.diode); y+=18;
+    valRow(ctx,y,'C:','24pF',C.diode);   y+=18;
+    footer(ctx,'3.91V');
+  },
+  thyristor(ctx){
+    clr(ctx); header(ctx,'Thyristor',HDR_COL.thyristor,'3.91V');
+    symThyristor(ctx,SX,SY,3,1,2,C.diode);
+    let y=HDR+10;
+    valRow(ctx,y,'Vgt:','1.2V',C.diode); y+=18;
+    footer(ctx,'3.91V');
+  },
+  triac(ctx){
+    clr(ctx); header(ctx,'Triac',HDR_COL.triac,'3.90V');
+    symTriac(ctx,SX,SY,3,1,2,C.diode);
+    let y=HDR+10;
+    valRow(ctx,y,'Vgt:','1.4V',C.diode); y+=18;
+    footer(ctx,'3.90V');
+  },
+  error(ctx){
+    clr(ctx); header(ctx,'Fehler',HDR_COL.error,null);
+    ctx.font='28px sans-serif'; ctx.fillStyle=C.error; ctx.textAlign='center';
+    ctx.fillText('⚠',W/2,H/2+4);
+    ctx.font='10px monospace'; ctx.fillText('Kein Bauteil',W/2,H/2+22);
+    ctx.textAlign='left';
+  },
+};
+
+// ── Render-Loop ───────────────────────────────────────────────────
+let raf=null;
+function show(name,btn){
+  if(raf){cancelAnimationFrame(raf);raf=null;}
+  if(btn){document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+  const cv=document.getElementById('main'), ctx=cv.getContext('2d');
+  if(name==='busy'){
+    const t0=performance.now();
+    (function loop(){SCREENS.busy(ctx,(performance.now()-t0)/500);raf=requestAnimationFrame(loop);})();
+  } else {
+    SCREENS[name](ctx);
+  }
+}
+
+// ── Galerie ───────────────────────────────────────────────────────
+function buildGallery(){
+  const entries=[
+    ['idle','Idle'],['busy','Messe…'],['npn','NPN'],['pnp','PNP'],
+    ['nmosfet','N-FET'],['pmosfet','P-FET'],['njfet','N-JFET'],
+    ['resistor','R'],['capacitor','C'],['inductor','L'],
+    ['diode','Diode'],['thyristor','Thyrist.'],['triac','Triac'],['error','Fehler']
+  ];
+  const g=document.getElementById('gallery');
+  entries.forEach(([name,label])=>{
+    const card=document.createElement('div'); card.className='mini-card';
+    const wrap=document.createElement('div'); wrap.className='mini-wrap';
+    // Render 284×240 → scale to 142×120 (50%)
+    const cv=document.createElement('canvas'); cv.width=142; cv.height=120;
+    const ctx=cv.getContext('2d');
+    const off=document.createElement('canvas'); off.width=W; off.height=H;
+    const octx=off.getContext('2d');
+    if(name==='busy') SCREENS.busy(octx,1.5); else SCREENS[name](octx);
+    ctx.drawImage(off,0,0,142,120);
+    wrap.appendChild(cv); card.appendChild(wrap);
+    const lbl=document.createElement('span'); lbl.className='mini-label'; lbl.textContent=label;
+    card.appendChild(lbl);
+    card.onclick=()=>{
+      const btn=[...document.querySelectorAll('.nav button')].find(b=>b.textContent===label);
+      show(name,btn);
+    };
+    g.appendChild(card);
+  });
+}
+
+buildGallery();
+show('idle',document.querySelector('.nav button'));
+</script>
+</body>
+</html>
