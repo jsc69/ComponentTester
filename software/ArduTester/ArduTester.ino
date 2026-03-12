@@ -62,45 +62,15 @@ char foo;
 
                                                  //ARDUTESTER FEATURES
 // ================================================================
-// FOR_BRUTZELBOY: ESP32-Cartridge-Schnittstelle aktivieren.
-// Auskommentieren fuer Original-Verhalten (LCD_PRINT etc.).
-// Mit FOR_BRUTZELBOY bleiben alle DEBUG_PRINT-Ausgaben erhalten.
+// ArduTester fuer BrutzelBoy ESP32-Cartridge-Schnittstelle
+// ATmega328P oder ATmega328PB erforderlich
 // ================================================================
-#define FOR_BRUTZELBOY
+#define DEBUG_PRINT                              //Serial-Ausgabe aktivieren
+#define USER_WAIT             3000               //Nextpage Timeout
 
-//Remember LCD_PRINT or DEBUG_PRINT
-#define BUTTON_INST                              //Button Installed
-// LCD nicht verfügbar wenn BrutzelBoy aktiv — Ausgabe über ESP32-Display
-//#define LCD_PRINT                              //Print on LCD
-//Remember DEBUG_PRINT or ATSW
-//#define ATSW                                   //ArduTester Software Client Enabled
-// DEBUG_PRINT nur wenn kein LCD aktiv (LCD_PRINT und DEBUG_PRINT schliessen sich aus)
-#ifndef LCD_PRINT
-  #define DEBUG_PRINT                          //Print on Serial Port
-#endif
-
-#define DET_COMP_ANALYSIS                        //Detailed Component Analysis (Soon)
-#define TIMEOUT_BL            600                //LCD Backlight Timeout
-#define LONG_PRESS            26                 //Button Long Press
-#define USER_WAIT             3000               //Nexpage Timeout
-
-//Check features
-#ifdef FOR_BRUTZELBOY
-  // ATmega328PB ist pin-kompatibel mit 328P, hat zusätzlich PORTE (PE0-PE3)
-  #if not defined(__AVR_ATmega328P__) && not defined(__AVR_ATmega328PB__)
-    #error FOR_BRUTZELBOY benoetigt ATmega328P oder ATmega328PB
-  #endif
-#else
-  #if not defined(__AVR_ATmega328P__)
-    #error Sorry, this program works only on Arduino Uno
-  #endif
-#endif
-#if defined(LCD_PRINT) && defined(DEBUG_PRINT)
-  #error Invalid Parameters: Use LCD_PRINT or DEBUG_PRINT
-#endif
-
-#if defined(DEBUG_PRINT) && defined(ATSW)
-  #error Invalid Parameters: Use DEBUG_PRINT or ATSW
+//Check MCU
+#if not defined(__AVR_ATmega328P__) && not defined(__AVR_ATmega328PB__)
+  #error Benoetigt ATmega328P oder ATmega328PB
 #endif
 
 //Includes
@@ -110,10 +80,6 @@ char foo;
 #include <EEPROM.h>
 
 //LCD Output
-#ifdef LCD_PRINT
-  #include <LiquidCrystal.h>
-  LiquidCrystal lcd(7, 6, 5, 4, 3, 2);           //RS,E,D4,D5,D6,D7
-#endif
 
 //UINT32_MAX
 #define UINT32_MAX            ((uint32_t)-1)
@@ -136,18 +102,12 @@ char foo;
     - pin 4: Rl3 680R (test pin 3)
     - pin 5: Rh3 470k (test pin 3)
 */
-#ifdef FOR_BRUTZELBOY
   // ATmega328PB-Platine: Widerstände an PORTD (PD2-PD7) statt PORTB
   // Original-Hardware (Arduino Uno): PORTB
   #define R_PORT                PORTD            //Port data register
   #define R_DDR                 DDRD             //Port data direction register
-#else
-  #define R_PORT                PORTB            //Port data register
-  #define R_DDR                 DDRB             //Port data direction register
-#endif
 
 //Push button
-#define TEST_BUTTON           A3                 //Test/start push button (low active)
 
 //Button Delay
 #define CYCLE_DELAY           3000
@@ -243,13 +203,8 @@ char foo;
 #define LCD_CHAR_FLAG         4                  //Flag Icon
 #define LCD_CHAR_RESIS1       6                  //Resistor left icon '[' 
 #define LCD_CHAR_RESIS2       7                  //Resistor right icon ']'
-#ifdef DEBUG_PRINT
   #define LCD_CHAR_OMEGA      79              
   #define LCD_CHAR_MICRO      '\u00B5'           //Code for Arduino Serial Monitor
-#else
-  #define LCD_CHAR_OMEGA      244                //Default: 244 
-  #define LCD_CHAR_MICRO      228
-#endif
 
 //Error type IDs
 #define TYPE_DISCHARGE        1                  //Discharge error
@@ -479,19 +434,11 @@ const unsigned char Hertz_str[] PROGMEM = "Hz";
 const unsigned char Splash_str[] PROGMEM = "Ardutester ";
 const unsigned char Version_str[] PROGMEM = "v0.7f";
 
-#ifdef DEBUG_PRINT 
   const unsigned char Cap_str[] PROGMEM = {'-','|','|', '-',0};
   const unsigned char Diode_AC_str[] PROGMEM = {'-', '>', '-', 0};
   const unsigned char Diode_CA_str[] PROGMEM = {'-', '<', '-', 0};
   const unsigned char Diodes_str[] PROGMEM = {'*', '>', ' ', ' ', 0};
   const unsigned char Resistor_str[] PROGMEM = {'-', '[', ']', '-', 0};
-#else
-  const unsigned char Cap_str[] PROGMEM = {'-',LCD_CHAR_CAP, '-',0};
-  const unsigned char Diode_AC_str[] PROGMEM = {'-', LCD_CHAR_DIODE1, '-', 0};
-  const unsigned char Diode_CA_str[] PROGMEM = {'-', LCD_CHAR_DIODE2, '-', 0};
-  const unsigned char Diodes_str[] PROGMEM = {'*', LCD_CHAR_DIODE1, ' ', ' ', 0};
-  const unsigned char Resistor_str[] PROGMEM = {'-', LCD_CHAR_RESIS1, LCD_CHAR_RESIS2, '-', 0};
-#endif
 
 //Diode icon with anode at left side
 byte DiodeIcon1[8]  = {0x11, 0x19, 0x1d, 0x1f, 0x1d, 0x19, 0x11, 0x00};
@@ -518,7 +465,6 @@ const unsigned int SmallCap_table[]  = {954, 903, 856, 814, 775, 740, 707, 676, 
 const unsigned int Inductor_table[]  = {4481, 3923, 3476, 3110, 2804, 2544, 2321, 2128, 1958, 1807, 1673, 1552, 1443, 1343, 1252, 1169, 1091, 1020, 953, 890, 831, 775, 721, 670, 621, 574, 527, 481, 434, 386, 334, 271};
 
 //Bitmasks for Rl probe resistors based on probe ID
-#ifdef FOR_BRUTZELBOY
   // ATmega328PB-Platine: Rl an PD2/PD4/PD6, Rh an PD3/PD5/PD7
   // (Original Arduino Uno: Rl an PB0/PB2/PB4, Rh an PB1/PB3/PB5)
   const unsigned char Rl_table[] = {(1 << 2), (1 << 4), (1 << 6)};  // PD2, PD4, PD6
@@ -532,11 +478,6 @@ const unsigned int Inductor_table[]  = {4481, 3923, 3476, 3110, 2804, 2544, 2321
   #define BUS_DATA_PORT PORTB
 
   uint8_t ValueCounter = 0;    // Zaehler fuer VAL1..VAL4 in DisplayValue()
-#else
-  const unsigned char Rl_table[]  = {(1 << (TP1 * 2)), (1 << (TP2 * 2)), (1 << (TP3 * 2))};
-  #define RL_MASK(tp)  (Rl_table[tp])
-  #define RH_MASK(tp)  (Rl_table[tp] << 1)
-#endif
 //Bitmasks for ADC pins based on probe ID
 const unsigned char ADC_table[]  = {(1 << TP1), (1 << TP2), (1 << TP3)};
 
@@ -577,10 +518,10 @@ void ShowDiode_C(Diode_Type *Diode);
 //     0x03=1kHz, 0x04=2.5kHz, 0x05=5kHz, 0x06=10kHz, 0x07=25kHz
 //   Nicht unterstuetzt (TODO): 0x08=50Hz, 0x09=10Hz, 0x0A=1Hz,
 //     0x0B=50kHz, 0x0C=100kHz, 0x0D=250kHz, 0x0E=500kHz,
+// SYS_STAT Werte: 0x00=IDLE, 0x01=BUSY, 0x02=DONE, 0x03=CAL, 0xFF=CAL_FEHLER
 //     0x0F=1MHz, 0x10=2MHz
 //   0xFF = Generator STOPP
 // ================================================================
-#ifdef FOR_BRUTZELBOY
 
 // Handshake-Pin-Defines
 #define BB_WR_DDR   DDRC
@@ -592,6 +533,9 @@ void ShowDiode_C(Diode_Type *Diode);
 #define BB_CS_PIN   PIND
 #define BB_CS_DDR   DDRD
 #define BB_CS_BIT   PD0    // ESP32  → ATmega: Kommando pending (Input)
+#define BB_BTN_PIN  PINC
+#define BB_BTN_DDR  DDRC
+#define BB_BTN_BIT  PC3    // Taster: GND = gedrückt (low-active)
 
 // Handshake-Timeout in Microsekunden (ESP32 I2C max ~1ms pro Zugriff)
 #define BB_ACK_TIMEOUT_US  5000
@@ -602,20 +546,20 @@ void bbHandshakeInit() {
   BB_WR_PORT &= ~(1 << BB_WR_BIT);              // PC4 = LOW
   BB_RD_DDR  &= ~(1 << BB_RD_BIT);              // PC5 Eingang
   BB_CS_DDR  &= ~(1 << BB_CS_BIT);              // PD0 Eingang
+  BB_BTN_DDR &= ~(1 << BB_BTN_BIT);             // PC3 Eingang
+  PORTC      |=  (1 << BB_BTN_BIT);             // PC3 Pull-up
 }
 
 // Einen Frame senden mit Handshake.
 // Gibt true zurück wenn ESP32 ACK gegeben hat, false bei Timeout.
 // Port-Zustände werden gesichert damit Messwiderstände unbeeinflusst bleiben.
 bool sendToEsp(uint8_t id, uint8_t data) {
-  #ifdef DEBUG_PRINT
     Serial.print(F("[BUS] ID=0x"));
     if (id   < 0x10) Serial.print(F("0"));
     Serial.print(id, HEX);
     Serial.print(F(" DATA=0x"));
     if (data < 0x10) Serial.print(F("0"));
     Serial.println(data, HEX);
-  #endif
 
   uint8_t oldDDRE  = DDRE,  oldDDRB  = DDRB;
   uint8_t oldPORTE = PORTE, oldPORTB = PORTB;
@@ -638,9 +582,7 @@ bool sendToEsp(uint8_t id, uint8_t data) {
       BB_WR_PORT &= ~(1 << BB_WR_BIT);
       DDRE = oldDDRE; DDRB = oldDDRB;
       PORTE = oldPORTE; PORTB = oldPORTB;
-      #ifdef DEBUG_PRINT
         Serial.println(F("[BUS] TIMEOUT"));
-      #endif
       return false;
     }
   }
@@ -762,9 +704,7 @@ bool checkBrutzelBoyCommand() {
   // Kein Kommando wenn CS (PD0) nicht HIGH
   if (!(BB_CS_PIN & (1 << BB_CS_BIT))) return false;
 
-  #ifdef DEBUG_PRINT
     Serial.println(F("[CMD] Kommando pending"));
-  #endif
 
   // Bereit signalisieren: WR HIGH = "ATmega bereit zum Lesen"
   BB_WR_PORT |=  (1 << BB_WR_BIT);
@@ -784,9 +724,7 @@ bool checkBrutzelBoyCommand() {
       BB_WR_PORT &= ~(1 << BB_WR_BIT);
       DDRE = oldDDRE; DDRB = oldDDRB;
       PORTE = oldPORTE; PORTB = oldPORTB;
-      #ifdef DEBUG_PRINT
         Serial.println(F("[CMD] TIMEOUT"));
-      #endif
       return false;
     }
   }
@@ -809,10 +747,8 @@ bool checkBrutzelBoyCommand() {
   DDRE = oldDDRE; DDRB = oldDDRB;
   PORTE = oldPORTE; PORTB = oldPORTB;
 
-  #ifdef DEBUG_PRINT
     Serial.print(F("[CMD] cmd=0x")); Serial.print(cmd, HEX);
     Serial.print(F(" param=0x")); Serial.println(param, HEX);
-  #endif
 
   // Kommando ausfuehren
   switch (cmd) {
@@ -825,9 +761,7 @@ bool checkBrutzelBoyCommand() {
 
     case 0x2:  // FREQ_METER - Frequenzmessung
       // STUB: Frequenzmessung noch nicht implementiert
-      #ifdef DEBUG_PRINT
         Serial.println(F("[CMD] FREQ_METER: nicht implementiert"));
-      #endif
       sendToEspReliable(0x0A, 0x01);            // MSG: No part (Platzhalter)
       break;
 
@@ -859,11 +793,9 @@ bool checkBrutzelBoyCommand() {
         // TODO: Frequenzen ausserhalb PWM_Tool-Bereich (1Hz-50Hz, >25kHz)
         // Protokoll-Indizes 0x00-0x02 (1Hz, 10Hz, 50Hz) und
         // 0x0B-0x10 (50kHz-2MHz) noch nicht implementiert
-        #ifdef DEBUG_PRINT
           Serial.print(F("[CMD] SIG_GEN: Frequenz-Index 0x"));
           Serial.print(param, HEX);
           Serial.println(F(" nicht unterstuetzt"));
-        #endif
       }
       break;
     }
@@ -877,19 +809,15 @@ bool checkBrutzelBoyCommand() {
       } else if (param >= 1 && param <= 99) {
         // TODO: PWM_Tool_WithDuty(freq, param) implementieren
         // Vorlaeufig: 1kHz mit festem 50% Duty-Cycle
-        #ifdef DEBUG_PRINT
           Serial.print(F("[CMD] PWM_GEN: Duty-Cycle "));
           Serial.print(param); Serial.println(F("% (TODO: wird noch ignoriert)"));
-        #endif
         PWM_Tool(1000);
       }
       break;
 
     case 0x5:  // C_ESR_METER - Kondensator + ESR Messung
       // STUB: ESR-Messung noch nicht implementiert
-      #ifdef DEBUG_PRINT
         Serial.println(F("[CMD] C_ESR_METER: nicht implementiert"));
-      #endif
       break;
 
     case 0x6:  // SELF_TEST - Kalibrierung / Selbsttest
@@ -897,30 +825,49 @@ bool checkBrutzelBoyCommand() {
       break;
 
     case 0x7:  // POWER_OFF - Standby
-      // ATmega in Power-Down versetzen (wdt_disable vorher)
       wdt_disable();
-      #ifdef DEBUG_PRINT
-        Serial.println(F("[CMD] POWER_OFF"));
-      #endif
+      Serial.println(F("[CMD] POWER_OFF"));
       set_sleep_mode(SLEEP_MODE_PWR_DOWN);
       sleep_enable();
       sleep_cpu();
-      // Hier geht es weiter nach Wake-up (z.B. durch Reset)
       sleep_disable();
       break;
 
+    case 0x8: {  // CALIBRATE - SelfAdjust + SaveEEP
+      Serial.println(F("[CMD] CALIBRATE"));
+      sendToEspReliable(0x0E, 0x03);               // STAT_CAL
+      byte calResult = SelfAdjust();
+      if (calResult) SaveEEP();
+      // Kalibrierwerte senden: VAL1=RiL, VAL2=RiH, VAL3=RZero, VAL4=CapZero+Offsets
+      sendToEspReliable(0x0B, 0x00);               // UNIT: keine Einheit
+      sendToEspReliable(0x02, lowByte(Config.RiL));
+      sendToEspReliable(0x03, highByte(Config.RiL));
+      sendToEspReliable(0x0B, 0x00);
+      sendToEspReliable(0x04, lowByte(Config.RiH));
+      sendToEspReliable(0x05, highByte(Config.RiH));
+      sendToEspReliable(0x0B, 0x00);
+      sendToEspReliable(0x06, lowByte(Config.RZero));
+      sendToEspReliable(0x07, highByte(Config.RZero));
+      // VAL4: LO=CapZero, HI=RefOffset+128 (signed→unsigned), extra: CompOffset+128 in TEXT_MSG
+      sendToEspReliable(0x0B, 0x00);
+      sendToEspReliable(0x08, Config.CapZero);
+      sendToEspReliable(0x09, (uint8_t)(Config.RefOffset + 128));
+      // CompOffset als extra DATA in TEXT_MSG (0x0A), Wert +128
+      sendToEspReliable(0x0A, (uint8_t)(Config.CompOffset + 128));
+      // Status: OK=0x02, Fehler=0x03
+      sendToEspReliable(0x0E, calResult ? 0x02 : 0xFF);
+      break;
+    }
+
     default:
-      #ifdef DEBUG_PRINT
         Serial.print(F("[CMD] Unbekanntes Kommando: 0x"));
         Serial.println(cmd, HEX);
-      #endif
       break;
   }
 
   return false;
 }
 
-#endif  // FOR_BRUTZELBOY
 // ================================================================
 
 //Program control
@@ -936,30 +883,7 @@ void setup()
   power_spi_disable();
   power_twi_disable();
   power_timer2_disable();
-  #ifdef LCD_PRINT  
-    lcd.begin(16,2);  
-    delay(5);
-    //Symbols for components
-    lcd.createChar(LCD_CHAR_DIODE1,DiodeIcon1);  //Diode symbol |<|
-    lcd.createChar(LCD_CHAR_DIODE2,DiodeIcon2);  //Diode symbol |<|
-    lcd.createChar(LCD_CHAR_CAP,CapIcon);        //Capacitor symbol ||
-    lcd.createChar(LCD_CHAR_RESIS1,ResIcon1);    //Resistor symbol [  
-    lcd.createChar(LCD_CHAR_RESIS2,ResIcon2);    //Resistor symbol ] 
-    lcd.createChar(LCD_CHAR_FLAG,FlagIcon);      //Flag symbol
-    lcd.home();
-    lcd_fixed_string(Splash_str);
-    lcd_fixed_string(Version_str);
-  #endif
-  #ifdef ATSW                                    //Client Begin
-    Serial.begin(19200);
-  #endif
-  #ifdef DEBUG_PRINT   
-    #ifdef FOR_BRUTZELBOY
       Serial.begin(115200);                      //BrutzelBoy: höhere Baudrate
-    #else
-      Serial.begin(9600);                        //Serial Output
-    #endif
-  #endif
   //Setup ÂµC
   ADCSRA = (1 << ADEN) | ADC_CLOCK_DIV;          //Enable ADC and set clock divider 
   MCUSR &= ~(1 << WDRF);                         //Reset watchdog flag 
@@ -967,33 +891,21 @@ void setup()
   wdt_disable();                                 //Disable watchdog 
   //Default offsets and values
   Config.Samples = ADC_SAMPLES;                  //Number of ADC samples 
-#ifdef FOR_BRUTZELBOY
   Config.AutoScale = 0;  //Disable ADC auto scaling (ATmega328PB: Bandgap settling too slow)
-#else
-  Config.AutoScale = 1;                          //Enable ADC auto scaling
-#endif
   Config.RefFlag = 1;                            //No ADC reference set yet 
   delay(100);
   //Reset variables
   RunsMissed = 0;
   RunsPassed = 0;
   Config.TesterMode = MODE_CONTINOUS;            //Set default mode: continous
-  #ifdef FOR_BRUTZELBOY
     bbHandshakeInit();                           // Handshake-Pins initialisieren
-  #endif
   LoadAdjust();                                  //Load adjustment values
-  #ifdef DEBUG_PRINT
     Serial.print(X("A  R  D  U  T  E  S  T  E  R "));
     lcd_fixed_string(Version_str);               //Print Ardutester Version
     Serial.println();
     Serial.println(X("      By PighiXXX & PaoloP"));
     Serial.println(X("original version by Markus Reschke"));
     Serial.println();
-    #ifdef BUTTON_INST
-      Serial.print(X("Press Button to Probe"));
-      Serial.println(X(", long press enter Menu"));
-    #endif
-  #endif
   delay(100);
 }
 
@@ -1001,18 +913,15 @@ void setup()
 void loop()
 {
   byte Test;
-  #ifdef FOR_BRUTZELBOY
-    // A3 (PC3) = CARD_CLK, kein Button — direkt messen ohne Warten
-    Test = 1;
-  #elif defined(BUTTON_INST)
-    Test = TestKey(0, 0);                        //Wait user
-  #else
-    delay(3000);                                 //No button installed, Wait 3 seconds
-    Test=1;                                      //No button, no menu :-)
-  #endif
-  #ifdef WDT_enabled
-    wdt_enable(WDTO_2S);                         //Enable watchdog (timeout 2s)
-  #endif                 
+    // Warten auf Button (PC3 low-active) oder CMD_START_TEST vom ESP32
+    Test = 1;  // Default: Test starten wenn Signal kommt
+    sendToEspReliable(0x0E, 0x00);               // STATUS: IDLE
+    while (true) {
+      if (!(BB_BTN_PIN & (1 << BB_BTN_BIT))) break;  // PC3 LOW = Button gedrückt
+      if (checkBrutzelBoyCommand()) break;            // CMD_START_TEST empfangen
+      delay(200);
+      sendToEspReliable(0x0E, 0x00);               // STATUS: IDLE wiederholen
+    }
   //Reset variables
   Check.Found = COMP_NONE;
   Check.Type = 0;
@@ -1021,34 +930,20 @@ void loop()
   Check.Resistors = 0;
   BJT.hFE = 0;
   BJT.I_CE0 = 0;
-  #ifdef FOR_BRUTZELBOY
     sendToEspReliable(0x0E, 0x00);               // STATUS: IDLE
-  #endif
   //Reset hardware
   SetADCHiz();                                   //Set all pins of ADC port as input  
   lcd_clear();                                   //Clear LCD
-  #ifdef LCD_PRINT 
-    lcd_fixed_string(Splash_str);
-    lcd_fixed_string(Version_str);
-  #endif
   //Internal bandgap reference
   Config.U_Bandgap = ReadU(0x0e);                //Dummy read for bandgap stabilization 
   Config.Samples = 200;                          //Do a lot of samples for high accuracy 
   Config.U_Bandgap = ReadU(0x0e);                //Get voltage of bandgap reference 
   Config.Samples = ADC_SAMPLES;                  //Set samples back to default 
   Config.U_Bandgap += Config.RefOffset;          //Add voltage offset 
-  if (Test==2)                                   //Long Press
-  {
-    wdt_disable();                               //Disable watchdog
-    MainMenu();                                  //Main Menu
-  }
-  else
   {
     if (AllProbesShorted() == 3)                 //All probes Shorted!
       {
-        #ifdef DEBUG_PRINT
           Serial.println();
-        #endif
         lcd_fixed_string(Remove_str);            //Display: Remove/Create
         lcd_line(2);
         lcd_fixed_string(ShortCircuit_str);      //Display: short circuit! 
@@ -1058,10 +953,8 @@ void loop()
         //Display start of probing
         lcd_line(2);                             //Move to line #2
         lcd_fixed_string(Running_str);           //Display: probing...
-        #ifdef FOR_BRUTZELBOY
           sendToEspReliable(0x0E, 0x01);         // STATUS: BUSY
           sendToEspReliable(0x0A, 0x04);         // MSG: Probing...
-        #endif
         DischargeProbes();
         if (Check.Found == COMP_ERROR)           //Discharge failed
         {                                        //Only for Standalone Version!                                     
@@ -1086,33 +979,16 @@ void loop()
           if ((Check.Found == COMP_NONE) ||
               (Check.Found == COMP_RESISTOR))
           {
-            #ifdef DEBUG_PRINT
               Serial.println();
               Serial.println(X("Wait a moment..."));
-            #else
-              //Tell user to be patient with large caps
-              lcd_clear_line(2);
-              lcd_fixed_string(Running_str);
-              lcd_data('.'); 
-            #endif
             //Check all possible combinations
             MeasureCap(TP3, TP1, 0);
-            #ifdef LCD_PRINT
-              lcd_data('.'); 
-            #endif
             MeasureCap(TP3, TP2, 1);
-            #ifdef LCD_PRINT
-              lcd_data('.'); 
-            #endif
             MeasureCap(TP2, TP1, 2);
           }
           //Clear LCD
           lcd_clear();
-          #ifdef BUTTON_INST
-            pinMode(TEST_BUTTON, INPUT_PULLUP);  //Reinitialize the pushbutton pin as an input
-          #endif          
           //Call output function based on component type
-          #ifdef DEBUG_PRINT   
             Serial.print("Found: ");
             //Components ID's
             switch (Check.Found)
@@ -1151,10 +1027,7 @@ void loop()
                 Serial.println(X("Thyristor"));
                 break;
             }
-          #endif
-          #ifdef FOR_BRUTZELBOY
             reportComponent();                   // TYPE + PINS senden
-          #endif
           switch (Check.Found)
           {
             case COMP_ERROR:
@@ -1187,7 +1060,6 @@ void loop()
             default:                             //No component found
               ShowFail();
           }
-          #ifdef FOR_BRUTZELBOY
             sendToEspReliable(0x0E, 0x02);       // STATUS: DONE
             // Warten auf CMD_START_TEST vom ESP32 (Button-Druck)
             // checkBrutzelBoyCommand() gibt true zurueck wenn START_TEST empfangen
@@ -1196,21 +1068,13 @@ void loop()
               while (!start) {
                 sendToEspReliable(0x0E, 0x02);   // STATUS: DONE wiederholen
                 start = checkBrutzelBoyCommand();
-                if (!start) delay(200);
+                if (!start) {
+                  // Physischen Button (PC3, low-active) abfragen
+                  if (!(BB_BTN_PIN & (1 << BB_BTN_BIT))) start = true;
+                  else delay(200);
+                }
               }
             }
-          #endif
-          #ifdef ATSW                            //Client output
-            Serial.println("@>");
-            Serial.println(Check.Found);
-            Serial.println("|");
-            Serial.println(Check.Type);
-            Serial.println("|");
-            Serial.println(Check.Done);
-            Serial.println("|");
-            Serial.println("@<");
-            //Component spedific output
-          #endif
           //Component was found
           RunsMissed = 0;                        //Reset counter
           RunsPassed++;                          //Increase counter
@@ -3558,41 +3422,20 @@ byte MeasureInductor(Resistor_Type *Resistor)
 //Clear the display 
 void lcd_clear(void)
 {
-  #ifdef LCD_PRINT
-    lcd.clear();
-    delay(2);                                    //LCD needs some time for processing
-  #endif
-  #ifdef DEBUG_PRINT
     Serial.println();
-  #endif
 }
 
 //Move cursor to the first position of a specified line
 void lcd_line(unsigned char Line)
 {
-  #ifdef LCD_PRINT
-    lcd.setCursor(0,Line);
-  #endif
-  #ifdef DEBUG_PRINT
     Serial.println();
-  #endif
 }
 
  //Clear single line of display
  void lcd_clear_line(unsigned char Line)
 {
   unsigned char               Pos;
-  #ifdef LCD_PRINT
-    lcd_line(Line);                              //Go to beginning of line
-    for (Pos = 0; Pos < 20; Pos++)               //For 20 times
-    {
-      lcd_data(' ');                             //Send space
-    }
-    lcd_line(Line);                              //Go back to beginning of line
-  #endif
-  #ifdef DEBUG_PRINT
     Serial.println();
-  #endif
 }
 
 //Write probe pin number to the LCD
@@ -3628,12 +3471,7 @@ void lcd_fixed_string(const unsigned char *String)
 //Send data to the LCD
 void lcd_data(unsigned char Data)
 {
-  #ifdef LCD_PRINT                  
-    lcd.write(Data);                             //Send data to LCD
-  #endif
-  #ifdef DEBUG_PRINT                  
     Serial.write(Data);                          //Send data to Serial
-  #endif
 }
 
                                                  //USER FUNCTIONS
@@ -3641,7 +3479,6 @@ void lcd_data(unsigned char Data)
 //Display value and unit
 void DisplayValue(unsigned long Value, signed char Exponent, unsigned char Unit)
 {
-#ifdef FOR_BRUTZELBOY
   // --- BrutzelBoy: Wert skalieren und als Bus-Frame senden ---
   {
     unsigned long busVal = Value;
@@ -3668,7 +3505,6 @@ void DisplayValue(unsigned long Value, signed char Exponent, unsigned char Unit)
       ValueCounter++;
     }
   }
-#endif
   unsigned char               Prefix = 0;        //Prefix character
   byte                        Offset = 0;        //Exponent offset to next 10^3 step
   byte                        Index;             //Index ID
@@ -3759,6 +3595,11 @@ void ShortCircuit(byte Mode)
     lcd_fixed_string(String);                    //Display: Remove/Create
     lcd_line(2);
     lcd_fixed_string(ShortCircuit_str);          //Display: short circuit!
+    // BrutzelBoy informieren
+    if (Mode == 0)
+      sendToEspReliable(0x0A, 0x07);            // MSG_SHORT_REMOVE
+    else
+      sendToEspReliable(0x0A, 0x06);            // MSG_SHORT_CREATE
     Run = 1;                                     //Enter loop
   }
   //Wait until all probes are dis/connected
@@ -3780,113 +3621,6 @@ void ShortCircuit(byte Mode)
   }
 }
 
-//Detect keypress of test push button
-byte TestKey(unsigned int Timeout, byte Mode)
-{
-  byte                        Flag = 0;          //Return value
-  byte                        Run = 1;           //Loop control
-  byte                        Counter = 0;       //Time counter
-  byte                        ButtonStatus=0;    //Button Status
-  //Init
-  if (Mode > 10)                                 //Consider operation mode
-  {
-    if (Config.TesterMode == MODE_AUTOHOLD)      //Auto hold mode
-    {
-      Timeout = 0;                               //Disable timeout
-      Mode -= 10;                                //Set cursor mode
-    }
-    else                                         //Continous mode
-    {
-      Mode = 0;                                  //Disable cursor
-    }
-  }
-  if (Mode > 0)                                  //Cursor enabled
-  {
-    //Set position: char 16 in line 2
-    #ifdef LCD_PRINT
-      lcd.setCursor(15, 2);
-      //Enable cursor
-      lcd.cursor();
-    #endif
-  }
-  //Wait for key press or timeout
-  while (Run)
-  {
-    //Take care about timeout
-    if (Timeout > 0)                             //Timeout enabled
-    {
-      //Set position: char 16 in line 2
-      #ifdef LCD_PRINT
-        lcd.setCursor(15, 2);
-        //Show flag, more info
-        lcd_data(LCD_CHAR_FLAG);
-      #endif
-      if (Timeout > 5) Timeout -= 5;             //Decrease timeout by 5ms
-      else Run = 0;                              //End loop on timeout
-    }
-    //Check for key press, Test push button is low active
-    if (!(digitalRead(TEST_BUTTON)))             //If key is pressed
-    {
-      Counter = 0;                               //Reset counter
-      delay(30);                                 //Time to debounce
-      while (Run)                                //Detect how long key is pressed
-      {
-        if (!(digitalRead(TEST_BUTTON)))         //Key still pressed
-        {
-          Counter++;                             //Increase counter
-          if (Counter > LONG_PRESS) Run = 0;     //End loop if LONG_PRESS are reached
-          else delay(10);                        //Otherweise wait 10ms
-        }
-        else                                     //Key released
-        {
-          Run = 0;                               //End loop
-        }
-      }
-      //Determine key press type
-      if (Counter > LONG_PRESS) Flag = 2;        //Long (>= LONG_PRESS)
-      else Flag = 1;                             //Short (< LONG_PRESS)
-    }
-    else                                         //No key press
-    {
-      delay(5);                                  //Wait a little bit more (5ms)
-      //Simulate blinking cursor, The LCDs built in cursor blinking is ugly and slow
-      if (Mode == 2)                             //Blinking cursor
-      {
-        Counter++;                               //Increase counter
-        if (Counter == 100)                      //Every 500ms (2Hz)
-        {
-          Counter = 0;                           //Reset counter
-          //We misuse Run as toggle switch
-          if (Run == 1)                          //Turn off
-          {
-            //Disable cursor
-            #ifdef LCD_PRINT
-              lcd.noCursor();
-            #endif
-            Run = 2;                             //Toggle flag
-          }
-          else                                   //Turn on
-          {
-            //Enable cursor
-            #ifdef LCD_PRINT
-              lcd.cursor();
-            #endif
-            Run = 1;                             //Toggle flag
-          }
-        }
-      }
-    }
-  }
-  //Clean up
-  if (Mode > 0)                                  //Cursor enabled
-  {
-    //Disable cursor
-    #ifdef LCD_PRINT
-      lcd.noCursor();
-    #endif
-  }
-  return Flag;
-}
 
 //Show failed test
 void ShowFail(void)
@@ -3909,9 +3643,7 @@ void ShowFail(void)
 //Show Error                                     //Only for Standalone Version!
 void ShowError()
 {
-  #ifdef FOR_BRUTZELBOY
     ValueCounter = 0;                             // kein reportComponent() vor ShowError
-  #endif
   if (Check.Type == TYPE_DISCHARGE)              //Discharge failed
   {
     lcd_fixed_string(DischargeFailed_str);       //Display: Battery?
@@ -4054,11 +3786,7 @@ void ShowDiode(void)
     I_leak = GetLeakageCurrent();                //Get current (in ÂµA) 
     if (I_leak > 0)                              //Show if not zero 
     {
-      #ifdef BUTTON_INST
-        TestKey(USER_WAIT, 11);                  //Next page
-      #else
         delay(3000);
-      #endif
       lcd_clear_line(2);                         //Only change line #2 
       lcd_fixed_string(I_R_str);                 //Display: I_R= 
       DisplayValue(I_leak, -6, 'A');             //Display current 
@@ -4071,11 +3799,7 @@ void ShowDiode(void)
   //Capacitance
   if (SkipFlag == 0)
   {
-    #ifdef BUTTON_INST
-      TestKey(USER_WAIT, 11);                    //Next page
-    #else
       delay(3000);
-    #endif
     lcd_clear_line(2);                           //Only change line #2
     lcd_fixed_string(DiodeCap_str);              //Display: C= 
     ShowDiode_C(D1);                             //First diode 
@@ -4141,11 +3865,7 @@ void ShowBJT(void)
     //If the diode matches the transistor
     if ((Diode->A == A_Pin) && (Diode->C == C_Pin))
     {
-      #ifdef BUTTON_INST
-        TestKey(USER_WAIT, 11);                  //Next page
-      #else
         delay(3000);
-      #endif
       lcd_clear_line(2);                         //Update line #2
       lcd_fixed_string(V_BE_str);                //Display: V_BE=
       /*
@@ -4190,11 +3910,7 @@ void ShowBJT(void)
       //I_CEO: collector emitter cutoff current (leakage)
       if (BJT.I_CE0 > 0)                         //Show if not zero 
       {
-        #ifdef BUTTON_INST
-          TestKey(USER_WAIT, 11);                //Next page 
-        #else
           delay(3000);
-        #endif
         lcd_clear_line(2);                       //Only change line #2 
         lcd_fixed_string(I_CEO_str);             //Display: I_CE0= 
         DisplayValue(BJT.I_CE0, -6, 'A');        //Display current 
@@ -4218,11 +3934,7 @@ void Show_FET_IGBT_Extras(byte Symbol)
     lcd_space();                                 //Display space
     lcd_data(Symbol);                            //Display diode symbol
   }
-  #ifdef BUTTON_INST
-    TestKey(USER_WAIT, 11);                      //Next page
-  #else
     delay(3000);
-  #endif
   lcd_clear();
   //Gate threshold voltage
   lcd_fixed_string(Vth_str);                     //Display: Vth
@@ -4598,12 +4310,8 @@ byte SelfTest(void)
       //Wait and check test push button 
       if (Counter < 100)                         //When we don't skip this test
       {
-        #ifdef BUTTON_INST
-          DisplayFlag = TestKey(1000, 0);        //Catch key press or timeout
-        #else
           delay(1000);
           DisplayFlag=0;
-        #endif
         //Short press -> next test / long press -> end selftest
         if (DisplayFlag > 0)
         {
@@ -4781,12 +4489,8 @@ byte SelfAdjust(void)
       //Wait and check test push button
       if (Counter < 100)                         //When we don't skip this test
       {
-        #ifdef BUTTON_INST
-          DisplayFlag = TestKey(1000, 0);        //Catch key press or timeout
-        #else
           delay(1000);
           DisplayFlag=0;
-        #endif
         //Short press -> next test / long press -> end selftest
         if (DisplayFlag > 0)
         {
@@ -4845,60 +4549,12 @@ byte SelfAdjust(void)
     }
   }
   //Show values and offsets
-  ShowAdjust();
+  Serial.println(F("[CAL] Done"));
   if (Flag == 4) Flag = 1;                       //All adjustments done -> success
   else Flag = 0;                                 //Signal error
   return Flag;
 }
 
-//Show adjustment values and offsets
-void ShowAdjust(void)
-{
-  //Display RiL and RiH
-  lcd_clear();
-  lcd_fixed_string(RiLow_str);                   //Display: Ri-
-  lcd_space();
-  DisplayValue(Config.RiL, -1, LCD_CHAR_OMEGA);
-  lcd_line(2);
-  lcd_fixed_string(RiHigh_str);                  //Display: Ri+
-  lcd_space();
-  DisplayValue(Config.RiH, -1, LCD_CHAR_OMEGA);
-  #ifdef BUTTON_INST
-    TestKey(USER_WAIT, 11);                      //Let the user read
-  #else
-    delya(3000);
-  #endif
-  //Display C-Zero
-  lcd_clear();
-  lcd_fixed_string(CapOffset_str);               //Display: C0
-  lcd_space();
-  DisplayValue(Config.CapZero, -12, 'F');        //Display C0 offset
-  //Display R-Zero
-  lcd_line(2);
-  lcd_fixed_string(ROffset_str);                 //Display: R0
-  lcd_space();
-  DisplayValue(Config.RZero, -2, LCD_CHAR_OMEGA);//Display R0
-  #ifdef BUTTON_INST
-    TestKey(USER_WAIT, 11);                      //Let the user read
-  #else
-    delay(3000);
-  #endif
-  //Display offset of bandgap reference
-  lcd_clear();
-  lcd_fixed_string(URef_str);                    //Display: Vref
-  lcd_space();
-  DisplaySignedValue(Config.RefOffset, -3, 'V');
-  //Display offset of analog comparator
-  lcd_line(2);
-  lcd_fixed_string(CompOffset_str);              //Display: AComp
-  lcd_space();
-  DisplaySignedValue(Config.CompOffset, -3, 'V');
-  #ifdef BUTTON_INST
-    TestKey(USER_WAIT, 11);                      //Let the user read
-  #else
-    delay(3000);
-  #endif
-}
 
 //PWM tool
 void PWM_Tool(unsigned int Frequency)
@@ -4965,21 +4621,13 @@ void PWM_Tool(unsigned int Frequency)
     DisplayValue(Ratio, 0, '%');                 //Show ratio in %
     delay(500);                                  //Smooth UI
     //Short key press -> increase ratio, long key press -> decrease ratio, two short key presses -> exit PWM
-    #ifdef BUTTON_INST
-      Test = TestKey(0, 0);                      //Wait for user feedback 
-    #else
       delay(3000);
       Test=1;
-    #endif
     if (Test == 1)                               //Short key press
     {
       delay(50);                                 //Debounce button a little bit longer
-      #ifdef BUTTON_INST
-        Prescaler = TestKey(200, 0);             //Check for second key press
-      #else
         delay(3000);
         Prescaler=0;
-      #endif
       if (Prescaler > 0)                         //Second key press
       {
         Test = 0;                                //End loop
@@ -5061,94 +4709,6 @@ void EEPROMWriteInt(int p_address, int p_value)
 }
 
                                                  //MENU FUNCTIONS
-//Main Menu
-void MainMenu(void)
-{
-  #ifdef DEBUG_PRINT
-    //Menu via Serial
-    unsigned int              Frequency;         //Frequency for PWM Tool
-    boolean                   doexit=false;      //Exit Menu Flag
-    do
-    {
-      boolean                 cmdexec=false;     //CMD Exec Flag
-      //Show Menu
-      Serial.println();
-      Serial.println(X("** MAIN MENU"));
-      Serial.println();
-      Serial.println(X("  1) PWM"));
-      Serial.println(X("  2) SelfTest"));
-      Serial.println(X("  3) Adjust"));
-      Serial.println(X("  4) Save"));
-      Serial.println(X("  5) Show"));
-      Serial.println(X("  6) Default"));
-      Serial.print(X("  0) Exit       >"));
-      //Check for incoming serial data:
-      do
-      {
-        if (Serial.available() > 0) 
-        {
-          //Read incoming serial data:
-          char inChar = Serial.read();
-          //User Feedback
-          Serial.println(inChar);
-          switch((byte)inChar-48)
-          {
-            case 1:                              //Pwm Menu
-              Serial.println();
-              Frequency=selFreq();
-              Serial.println();
-              Serial.println(X("Info:"));
-              Serial.println(X("  Short  Press +"));
-              Serial.println(X("  Long   Press -"));
-              Serial.println(X("  Double Press Exit"));
-              PWM_Tool(Frequency); 
-              Serial.println();
-              cmdexec=true;
-              break;
-            case 2:                              //Selftest
-              SelfTest();
-              Serial.println();
-              cmdexec=true;
-              break;
-            case 3:                              //Adjust
-              SelfAdjust();
-              Serial.println();
-              cmdexec=true;
-              break;
-            case 4:                              //Save
-              SaveEEP();
-              Serial.println();
-              cmdexec=true;
-            case 5:                              //Show
-              ShowAdjust();
-              Serial.println();
-              cmdexec=true;
-              break;
-           case 6:                               //Default Parameters
-              DefaultPar();
-              Serial.println();
-              cmdexec=true;
-              break;
-            case 0:                              //Exit
-              cmdexec=true;
-              doexit=true;
-              Serial.println();
-              Serial.println(X("Done. Exit"));
-              return;
-            default:
-              //Redo
-              Serial.print(X("                >"));
-              cmdexec=false;
-              doexit=false;
-          }
-       }  
-    } while (cmdexec==false);
-  } while (doexit==false);
-  #else
-    delay(800);
-    LcdMenu();
-  #endif
-}
 
 //Select Frequency
 unsigned int selFreq(void)
@@ -5188,114 +4748,7 @@ unsigned int selFreq(void)
   return 100;
 }
 
-//Lcd Menu
-void LcdMenu(void)
-{
-  byte                        Flag = 1;          //Control flag
-  byte                        Selected;          //ID of selected item
-  byte                        ID;                //ID of selected item
-  unsigned int                Frequency;         //PWM frequency
-  void                        *Menu[6];
-  //Setup menu
-  Menu[0] = (void *)PWM_str;
-  Menu[1] = (void *)Selftest_str;
-  Menu[2] = (void *)Adjustment_str;
-  Menu[3] = (void *)Save_str;
-  Menu[4] = (void *)Show_str;
-  Menu[5] = (void *)Default_str;
-  //Run menu
-  lcd_clear();
-  lcd_fixed_string(Select_str);
-  Selected = MenuTool(6, 1, Menu, NULL);
-  //Run selected item
-  switch (Selected)
-  {
-    case 0:                                      //PWM tool
-      //Run PWM menu
-      lcd_clear();
-      lcd_fixed_string(PWM_str);
-      ID = MenuTool(8, 2, (void **)PWM_Freq_table, (unsigned char *)Hertz_str);
-      //Get selected frequency
-      Frequency =PWM_Freq_table[ID];  
-      PWM_Tool(Frequency);                       //And run PWM tool
-      break;
-    case 1:                                      //Self test
-      Flag = SelfTest();
-      break;
-    case 2:                                      //Self adjustment
-      Flag = SelfAdjust();
-      break;
-    case 3:                                      //Save self adjument values
-      SaveEEP();
-      break;
-    case 4:                                      //Show self adjument values
-      ShowAdjust();
-      break;
-  }
-  //Display end of item
-  lcd_clear();
-  if (Flag == 1)
-    lcd_fixed_string(Done_str);                  //Display: done!
-  else
-    lcd_fixed_string(Error_str);                 //Display: error!
-}
 
-//Menu Tool
-byte MenuTool(byte Items, byte Type, void *Menu[], unsigned char *Unit)
-{
-  byte                        Selected = 0;      //Return value / ID of selected item
-  byte                        Run = 1;           //Loop control flag
-  byte                        n;                 //Temp value
-  void                        *Address;          //Address of menu element
-  unsigned int                Value;             //Temp. value
-  Items--;                                       //To match array counter
-  lcd_data(':');                                 //Whatever:
-  while (Run)
-  {
-    //Display item
-    lcd_clear_line(2);
-    Address = &Menu[Selected];                   //Get address of element
-    if (Type == 1)                               //Fixed string
-    {
-      lcd_fixed_string(*(unsigned char **)Address);
-    }
-    else          
-    {
-      Value=PWM_Freq_table[Selected];
-      DisplayValue(Value, 0, 0);
-    }
-    if (Unit)                                    //Optional fixed string
-    {
-      lcd_fixed_string(Unit);
-    }
-    //Show navigation help
-    delay(100);                                  //Smooth UI
-    //Set position: char 16 in line 2
-    #ifdef LCD_PRINT
-      lcd.setCursor(15,2);
-    #endif
-    if (Selected < Items) n = 126;               //Another item follows
-    else n = 127;                                //Last item
-    lcd_data(n);
-    //Process user feedback
-    n = TestKey(0, 0);                           //Wait for testkey
-    if (n == 1)                                  //Short key press: moves to next item
-    {
-      Selected++;                                //Move to next item
-      if (Selected > Items)                 
-      {
-        Selected = 0;                            //Roll over to first one
-      }
-    }
-    else if (n == 2)                             //Long key press: select current item
-    {
-      Run = 0;                          
-    }
-  }
-  lcd_clear();                 
-  delay(500);                                    //Smooth UI
-  return Selected;
-}
 
 //Reset Parameters
 void DefaultPar(void)

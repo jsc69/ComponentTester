@@ -69,18 +69,22 @@
 #define TYPE_TRIAC        0x0B
 
 // TEXT_MSG-Codes
-#define MSG_NO_PART  0x01
-#define MSG_SHORT    0x05
-#define MSG_OVERLOAD 0x03
-#define MSG_TESTING  0x02
-#define MSG_PROBING  0x04
-#define MSG_RESISTOR 0x07
-#define MSG_NONE     0x08
+#define MSG_NO_PART      0x01
+#define MSG_TESTING      0x02
+#define MSG_OVERLOAD     0x03
+#define MSG_PROBING      0x04
+#define MSG_SHORT        0x05
+#define MSG_SHORT_CREATE 0x06   // "Testpins kurzschließen"
+#define MSG_SHORT_REMOVE 0x07   // "Kurzschluss entfernen"
+#define MSG_RESISTOR     0x08
+#define MSG_NONE         0x09
 
 // SYS_STAT-Codes
-#define STAT_IDLE  0x00
-#define STAT_BUSY  0x01
-#define STAT_DONE  0x02
+#define STAT_IDLE    0x00
+#define STAT_BUSY    0x01
+#define STAT_DONE    0x02
+#define STAT_CAL     0x03
+#define STAT_CAL_ERR 0xFF
 
 // UNIT_SCALE: Low-Nibble=Prefix, High-Nibble=Dezimalstellen
 #define PREFIX_NONE  0
@@ -93,13 +97,14 @@
 
 // Kommando-IDs (ESP32 → ATmega)
 #define CMD_NOP        0x0
-#define CMD_START_TEST 0x1
-#define CMD_FREQ_METER 0x2
-#define CMD_SIG_GEN    0x3
-#define CMD_PWM_GEN    0x4
-#define CMD_C_ESR      0x5
-#define CMD_SELF_TEST  0x6
-#define CMD_POWER_OFF  0x7
+#define CMD_START_TEST  0x1
+#define CMD_FREQ_METER  0x2
+#define CMD_SIG_GEN     0x3
+#define CMD_PWM_GEN     0x4
+#define CMD_C_ESR       0x5
+#define CMD_SELF_TEST   0x6
+#define CMD_POWER_OFF   0x7
+#define CMD_CALIBRATE   0x8
 
 // ════════════════════════════════════════════════════════════════
 //  DISPLAY-LAYOUT  (Landscape, SCREEN_WIDTH×SCREEN_HEIGHT aus display.h)
@@ -141,6 +146,13 @@ struct BusData {
   uint8_t  text_msg  = 0;
   uint16_t batt_mv   = 0;
   uint8_t  sys_stat  = STAT_IDLE;
+  uint16_t cal_RiL   = 0;
+  uint16_t cal_RiH   = 0;
+  uint16_t cal_RZero = 0;
+  uint8_t  cal_Cap   = 0;
+  int8_t   cal_Ref   = 0;
+  int8_t   cal_Comp  = 0;
+  bool     cal_ok    = false;
   bool     fresh     = false;
 };
 
@@ -152,7 +164,6 @@ uint8_t  last_id   = 0xFF;
 uint8_t  last_data = 0xFF;
 uint32_t frame_nr  = 0;
 uint16_t last_keys = 0;
-bool     g_wait_for_button = false;  // true nach DONE: warten auf Tastendruck
 
 // ════════════════════════════════════════════════════════════════
 //  BRUTZELBOY-INSTANZ
@@ -266,6 +277,16 @@ String formatValue(uint16_t val, uint8_t unit_byte, const char* unit_str) {
   return s;
 }
 
+// U2.P1_0 (CARD_CLK/PC3) kurz auf LOW ziehen — wie physischer ArduTester-Button
+void pulseClk() {
+  // P1_0 als Output LOW (P1_3=CS und P1_6=PWR bleiben Output)
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x40); // P1_0=0, P1_6=1, P1_3=0
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1,    0x36); // P1_0+P1_3+P1_6 Output
+  delay(50);
+  // P1_0 wieder loslassen (Input/High-Z)
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1,    0x37); // P1_0 Input
+}
+
 // ════════════════════════════════════════════════════════════════
 //  BUTTON-HANDLING  (Flankenauswertung)
 // ════════════════════════════════════════════════════════════════
@@ -275,8 +296,8 @@ void handleButtons() {
   last_keys = (uint16_t)keys;
   if (!changed) return;
 
-  if (changed & (1 << INPUT_A))      { Serial.println("[BTN] A→START");    g_wait_for_button = false; g_result_shown_at = 0; sendCommand(CMD_START_TEST, 0x01); }
-  if (changed & (1 << INPUT_B))      { Serial.println("[BTN] B→SELFTEST"); sendCommand(CMD_SELF_TEST,  0x01); }
+  if (changed & (1 << INPUT_A))      { Serial.println("[BTN] A→START");    pulseClk(); }
+  if (changed & (1 << INPUT_B))      { Serial.println("[BTN] B→CALIBRATE"); sendCommand(CMD_CALIBRATE, 0x01); }
   if (changed & (1 << INPUT_SELECT)) { Serial.println("[BTN] SEL→SIG 1k"); sendCommand(CMD_SIG_GEN,   0x06); } // 1kHz
   if (changed & (1 << INPUT_START))  { Serial.println("[BTN] STA→SIGSTP"); sendCommand(CMD_SIG_GEN,   0xFF); } // Stop
   if (changed & (1 << INPUT_MENU))   { Serial.println("[BTN] MENU→PWM50"); sendCommand(CMD_PWM_GEN,   50);   } // 50%
@@ -297,11 +318,24 @@ void processBusFrame(uint8_t id, uint8_t data) {
       g_bus.sys_stat = data;
       if (data == STAT_DONE) {
         if (g_result_shown_at == 0) {
-          g_bus.fresh = true;
           g_result_shown_at = millis();
-          g_wait_for_button = true;   // Warten auf Tastendruck vor nächstem Test
-          displayResult();
+          if (g_bus.sys_stat == STAT_CAL) {
+            g_bus.cal_ok = true;
+            displayCalibration();
+          } else {
+            g_bus.fresh = true;
+            displayResult();
+          }
         }
+      } else if (data == STAT_CAL_ERR) {
+        if (g_result_shown_at == 0) {
+          g_result_shown_at = millis();
+          g_bus.cal_ok = false;
+          displayCalibration();
+        }
+      } else if (data == STAT_CAL) {
+        g_result_shown_at = 0;
+        displayProbing();
       } else if (data == STAT_IDLE) {
         // Ergebnis noch 5s stehen lassen, dann Idle-Screen
         if (g_result_shown_at == 0) {
@@ -315,7 +349,18 @@ void processBusFrame(uint8_t id, uint8_t data) {
       }
       break;
 
-    case BUS_ID_TEXT_MSG:   g_bus.text_msg = data;  break;
+    case BUS_ID_TEXT_MSG:
+      if (g_bus.sys_stat == STAT_CAL) {
+        if (data == MSG_SHORT_CREATE) { displayShortCircuit(true);  break; }
+        if (data == MSG_SHORT_REMOVE) { displayShortCircuit(false); break; }
+        g_bus.cal_Comp = (int8_t)(data - 128);
+      } else {
+        g_bus.text_msg = data;
+        if (data == MSG_PROBING)      { g_result_shown_at = 0; displayProbing(); }
+        if (data == MSG_SHORT_CREATE) { displayShortCircuit(true);  }
+        if (data == MSG_SHORT_REMOVE) { displayShortCircuit(false); }
+      }
+      break;
     case BUS_ID_TYPE:       g_bus.type = data; g_val_write_idx = 0; break;
     case BUS_ID_PINS:       g_bus.pins = data;  break;
 
@@ -324,13 +369,28 @@ void processBusFrame(uint8_t id, uint8_t data) {
       break;
 
     case BUS_ID_VAL1_LO: g_bus.val1  = data; break;
-    case BUS_ID_VAL1_HI: g_bus.val1 |= ((uint16_t)data<<8); g_bus.val1_unit = g_pending_unit; g_pending_unit = 0; break;
+    case BUS_ID_VAL1_HI:
+      g_bus.val1 |= ((uint16_t)data<<8); g_bus.val1_unit = g_pending_unit; g_pending_unit = 0;
+      if (g_bus.sys_stat == STAT_CAL) g_bus.cal_RiL = g_bus.val1;
+      break;
     case BUS_ID_VAL2_LO: g_bus.val2  = data; break;
-    case BUS_ID_VAL2_HI: g_bus.val2 |= ((uint16_t)data<<8); g_bus.val2_unit = g_pending_unit; g_pending_unit = 0; break;
+    case BUS_ID_VAL2_HI:
+      g_bus.val2 |= ((uint16_t)data<<8); g_bus.val2_unit = g_pending_unit; g_pending_unit = 0;
+      if (g_bus.sys_stat == STAT_CAL) g_bus.cal_RiH = g_bus.val2;
+      break;
     case BUS_ID_VAL3_LO: g_bus.val3  = data; break;
-    case BUS_ID_VAL3_HI: g_bus.val3 |= ((uint16_t)data<<8); g_bus.val3_unit = g_pending_unit; g_pending_unit = 0; break;
+    case BUS_ID_VAL3_HI:
+      g_bus.val3 |= ((uint16_t)data<<8); g_bus.val3_unit = g_pending_unit; g_pending_unit = 0;
+      if (g_bus.sys_stat == STAT_CAL) g_bus.cal_RZero = g_bus.val3;
+      break;
     case BUS_ID_VAL4_LO: g_bus.val4  = data; break;
-    case BUS_ID_VAL4_HI: g_bus.val4 |= ((uint16_t)data<<8); g_bus.val4_unit = g_pending_unit; g_pending_unit = 0; break;
+    case BUS_ID_VAL4_HI:
+      g_bus.val4 |= ((uint16_t)data<<8); g_bus.val4_unit = g_pending_unit; g_pending_unit = 0;
+      if (g_bus.sys_stat == STAT_CAL) {
+        g_bus.cal_Cap = (uint8_t)(g_bus.val4 & 0xFF);
+        g_bus.cal_Ref = (int8_t)(data - 128);
+      }
+      break;
     case BUS_ID_BATT_LO: g_bus.batt_mv  = data; break;
     case BUS_ID_BATT_HI: g_bus.batt_mv |= ((uint16_t)data<<8); break;
   }
@@ -573,12 +633,62 @@ void drawFooter() {
 //  SCREEN-FUNKTIONEN
 // ════════════════════════════════════════════════════════════════
 
+void displayShortCircuit(bool create) {
+  bb.fillScreen(C_BG);
+  drawHeader(create ? "Kalibrierung" : "Kalibrierung", 0x8410);  // Dunkelgrau
+  int16_t y = HDR_H + 20;
+  bb.setFont(&FONT_8X12); bb.setTextcolor(C_VALUE);
+  if (create) {
+    bb.drawString(8, y,      "Testpins");
+    bb.drawString(8, y + 20, "kurzschliessen!");
+  } else {
+    bb.drawString(8, y,      "Kurzschluss");
+    bb.drawString(8, y + 20, "entfernen!");
+  }
+  bb.updateDisplay();
+}
+
+void displayCalibration() {
+  uint16_t hdr_col = g_bus.cal_ok ? 0x07E0 : C_ERROR;  // Grün / Rot
+  drawHeader(g_bus.cal_ok ? "Kalibrierung OK" : "Kalibrierung ERR", hdr_col);
+
+  int16_t y = HDR_H + 6;
+  char val[16];
+
+  snprintf(val, sizeof(val), "%u Om", g_bus.cal_RiL);
+  drawRow(y, "RiL",  String(val)); y += 18;
+
+  snprintf(val, sizeof(val), "%u Om", g_bus.cal_RiH);
+  drawRow(y, "RiH",  String(val)); y += 18;
+
+  snprintf(val, sizeof(val), "%u Om", g_bus.cal_RZero);
+  drawRow(y, "R0",   String(val)); y += 18;
+
+  snprintf(val, sizeof(val), "%u pF", g_bus.cal_Cap);
+  drawRow(y, "C0",   String(val)); y += 18;
+
+  snprintf(val, sizeof(val), "%+d mV", (int)g_bus.cal_Ref);
+  drawRow(y, "Ref",  String(val)); y += 18;
+
+  snprintf(val, sizeof(val), "%+d mV", (int)g_bus.cal_Comp);
+  drawRow(y, "Comp", String(val));
+
+  bb.updateDisplay();
+}
+
 void displayIdle() {
   bb.fillScreen(C_BG);
   bb.setFont(&FONT_8X12); bb.setTextcolor(C_DKGREY);
   bb.drawString(10, DISP_H/2 - 6, "Bauteil einlegen...");
   bb.updateDisplay();
 }
+void displayProbing() {
+  bb.fillScreen(C_BG);
+  bb.setFont(&FONT_8X12); bb.setTextcolor(C_VALUE);
+  bb.drawString(10, DISP_H/2 - 6, "Messe...");
+  bb.updateDisplay();
+}
+
 
 void displayError(const char* msg) {
   bb.fillScreen(C_BG);
@@ -742,12 +852,6 @@ void loop() {
 
   if (!bb.isCartridgeReady()) {
     vTaskDelay(pdMS_TO_TICKS(10));
-    return;
-  }
-
-  // Nach abgeschlossenem Test auf Knopfdruck warten
-  if (g_wait_for_button) {
-    vTaskDelay(pdMS_TO_TICKS(50));
     return;
   }
 
