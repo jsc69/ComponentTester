@@ -20,9 +20,8 @@
 //  HANDSHAKE-PINS  (alle -1 = Polling-Modus, kein Handshake)
 //  Sobald WR/RD direkt am ESP32-GPIO verdrahtet sind, hier eintragen.
 // ════════════════════════════════════════════════════════════════
-#define BB_WR_PIN   -1   // ESP32→ATmega  "Frame bereit"
-#define BB_RD_PIN   -1   // ATmega→ESP32  "ACK"
-#define BB_CS_PIN   -1   // ATmega→ESP32  "Kommando pending"
+#define BB_WR_PIN   -1   // ESP32→ATmega  "Frame bereit" / "bereit zum Empfangen"
+#define BB_RD_PIN   -1   // ATmega→ESP32  "ACK" / "Kommando pending"
 
 // ════════════════════════════════════════════════════════════════
 //  INCLUDES
@@ -185,6 +184,8 @@ uint8_t  last_data      = 0xFF;
 uint32_t frame_nr       = 0;
 uint16_t last_keys      = 0;
 uint32_t g_state_since  = 0;   // millis() beim letzten State-Wechsel
+volatile bool g_cmd_active = false;  // sendCommand() läuft gerade
+bool g_display_dirty = false;
 
 // ════════════════════════════════════════════════════════════════
 //  BRUTZELBOY-INSTANZ
@@ -198,25 +199,73 @@ Brutzelboy bb(INIT_LCD | INIT_BUTTONS | INIT_CARTRIDGE);
 //  Stabilitätsprüfung: beide Register 2× lesen
 // ════════════════════════════════════════════════════════════════
 bool busRead(uint8_t &id_out, uint8_t &data_out) {
-  uint8_t u1a, u1b, u2a, u2b;
+  uint8_t u1a, u1b, u2a, u2b, u2p1;
+
+  if (g_cmd_active) {
+    id_out = 0x0F; data_out = 0xFF;
+    return false;
+  }
+
+  // Nur lesen wenn ATmega WR = HIGH (U2.P1_1 = Bit 1 = 0x02)
+  if (cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &u2p1) != CARTRIDGE_OK
+      || !(u2p1 & 0x02)) {
+    id_out = 0x0F; data_out = 0xFF;
+    return false;
+  }
+  ESP_LOGV(TAG_RAW, "WR=HIGH erkannt, u2p1=0x%02X", u2p1);  // ← NEU
+  uint8_t u2p1b;
+  if (cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &u2p1b) != CARTRIDGE_OK
+      || !(u2p1b & 0x02)) {
+    id_out = 0x0F; data_out = 0xFF;
+    return false;
+  }
+
+  // Bus lesen (2× für Stabilität)
   if (cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P0, &u1a) != CARTRIDGE_OK ||
       cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P0, &u2a) != CARTRIDGE_OK ||
       cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P0, &u1b) != CARTRIDGE_OK ||
       cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P0, &u2b) != CARTRIDGE_OK) {
-    id_out = 0x0F; data_out = 0xFF; return false;
+    id_out = 0x0F; data_out = 0xFF;
+    return false;
   }
+
   bool stable = ((u1a & 0x0F) == (u1b & 0x0F)) && (u2a == u2b);
 
   static uint8_t prev_u1 = 0xFF, prev_u2 = 0xFF;
   if (u1a != prev_u1 || u2a != prev_u2) {
     ESP_LOGV(TAG_RAW, "U1=%02X/%02X U2=%02X/%02X %s",
-                  u1a, u1b, u2a, u2b, stable ? "OK" : "UNSTABIL");
+             u1a, u1b, u2a, u2b, stable ? "OK" : "UNSTABIL");
     prev_u1 = u1a; prev_u2 = u2a;
   }
 
   if (!stable) { id_out = 0x0F; data_out = 0xFF; return false; }
+
   id_out   = u1a & 0x0F;
   data_out = u2a;
+
+  // P1_2 (RD) als Ausgang schalten
+  // DIR: P1_2=Out, P1_6=Out, Rest=In → 0xBB = 1011_1011
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1, 0xBB);
+
+  // RD = HIGH: ACK an ATmega
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x44);
+  ESP_LOGV(TAG_RAW, "RD=HIGH gesetzt, warte auf WR=LOW");  // ← NEU
+
+  // Warten auf WR = LOW vom ATmega — kein Timeout
+  uint32_t loop_count = 0;
+  while (true) {
+    if (cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &u2p1) == CARTRIDGE_OK
+        && !(u2p1 & 0x02)) break;
+    if (++loop_count % 100 == 0)
+      ESP_LOGV(TAG_RAW, "warte auf WR=LOW, u2p1=0x%02X, count=%lu", u2p1, loop_count);
+    delayMicroseconds(100);
+  }
+  ESP_LOGV(TAG_RAW, "WR=LOW erkannt nach %lu Iterationen", loop_count);
+
+  // RD = LOW, P1_2 wieder als Eingang
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x40);
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1, 0xBF); // nur P1_6=Out
+
   return true;
 }
 
@@ -231,48 +280,54 @@ bool sendCommand(uint8_t cmd, uint8_t param) {
     return false;
   }
 
-  // DIR: P1_6=Out(PWR), P1_3=Out(CS), P1_2=Out(RD), rest=In
-  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1, 0xB3);
+  g_cmd_active = true;
 
-  // Schritt 1: CS=HIGH, RD=HIGH sofort (ATmega prüft RD als Trigger)
-  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x4C); // P1_6=1, P1_3=1, P1_2=1
+  // DIR: P1_2(RD)=Out, P1_6(PWR)=Out, Rest=In → 0xBB
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1, 0xBB);
 
-  // Schritt 2: Warten auf WR=HIGH vom ATmega ("bereit zum Empfangen")
+  // ① RD = HIGH: "Kommando pending"
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x44);
+
+  // ② Warten auf WR = HIGH vom ATmega ("bereit zum Empfangen")
   uint8_t u2p1;
   uint32_t deadline = millis() + 10;
   bool wr_seen = false;
   while (millis() < deadline) {
     if (cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &u2p1) == CARTRIDGE_OK
-        && (u2p1 & 0x02)) { wr_seen = true; break; }
+        && (u2p1 & 0x02)) {
+      wr_seen = true;
+      break;
+    }
     delayMicroseconds(200);
   }
   if (!wr_seen) {
-    ESP_LOGW(TAG_CMD, "CMD: kein WR-ACK vom ATmega");
+    ESP_LOGW(TAG_CMD, "CMD 0x%X: kein WR-ACK vom ATmega", cmd);
     cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x40);
+    cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1, 0xBF);
+    g_cmd_active = false;
     return false;
   }
 
-  // Schritt 3: Kommando + Parameter auf den Bus legen
+  // ③ Kommando + Parameter auf den Bus legen
   cartridge_write_reg(CARTRIDGE_ADDR_U1, AW9523_REG_DIR_P0,    0x00);
   cartridge_write_reg(CARTRIDGE_ADDR_U1, AW9523_REG_OUTPUT_P0, cmd & 0x0F);
   cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P0,    0x00);
   cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P0, param);
 
-  // Schritt 4: kurz warten damit ATmega lesen kann
-  delayMicroseconds(500);
-
-  // Schritt 5: Warten bis ATmega WR=LOW zieht ("gelesen")
-  deadline = millis() + 10;
-  while (millis() < deadline) {
+  // ④ Warten auf WR = LOW vom ATmega ("gelesen") — kein Timeout
+  while (true) {
     if (cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &u2p1) == CARTRIDGE_OK
         && !(u2p1 & 0x02)) break;
     delayMicroseconds(200);
   }
 
-  // Schritt 6: RD=LOW, CS=LOW, Bus freigeben
+  // ⑤ RD = LOW, Bus freigeben, P1_2 wieder Eingang
   cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x40);
   cartridge_write_reg(CARTRIDGE_ADDR_U1, AW9523_REG_DIR_P0,    0xFF);
   cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P0,    0xFF);
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1,    0xBF); // P1_6=Out, Rest=In
+
+  g_cmd_active = false;
 
   ESP_LOGI(TAG_CMD, "CMD 0x%X param=0x%02X OK", cmd, param);
   return true;
@@ -356,8 +411,8 @@ void handleButtons() {
   if (changed & (1 << INPUT_A)) {
     ESP_LOGI(TAG_BTN, "A → CMD_START_TEST");
     sendCommand(CMD_START_TEST, 0x01);
-    // Den BrutzelBoy-State ändern wir NICHT hier — das macht STAT_BUSY
-    // wenn der ArduTester bestätigt dass er den Test gestartet hat.
+    last_id   = 0xFF;   // ← NEU: Duplikatfilter zurücksetzen
+    last_data = 0xFF;   // ← NEU
   }
 
   // Stubs für später:
@@ -395,12 +450,12 @@ void processBusFrame(uint8_t id, uint8_t data) {
           break;
         case STAT_BUSY:
           if (g_state != STATE_PROBING) {
-            g_bus = BusData();        // ← Daten zurücksetzen
+            g_bus = BusData();
             g_pending_unit = 0;
-            last_id   = 0xFF;
-            last_data = 0xFF;
+            last_id   = 0xFF;   // ← bereits vorhanden
+            last_data = 0xFF;   // ← bereits vorhanden
             setState(STATE_PROBING);
-            displayProbing();
+            g_display_dirty = true;
           }
           break;
         case STAT_DONE:
@@ -408,19 +463,19 @@ void processBusFrame(uint8_t id, uint8_t data) {
           if (g_state == STATE_PROBING) {
             setState(STATE_RESULT);
             ESP_LOGI(TAG_BUS, "RESULT: type=0x%02X pins=0x%02X text=0x%02X", g_bus.type, g_bus.pins, g_bus.text_msg);
-            displayResult();
+            g_display_dirty = true;
           }
           break;
         case STAT_CAL:
           setState(STATE_CAL);
-          displayProbing();
+          g_display_dirty = true;
           break;
         case STAT_CAL_ERR:
           if (g_state == STATE_CAL) {
             g_bus.cal_ok = false;
             setState(STATE_CAL_DONE);
             ESP_LOGW(TAG_CAL, "Kalibrierung fehlgeschlagen");
-            displayCalibration();
+            g_display_dirty = true;
           }
           break;
       }
@@ -928,7 +983,7 @@ void displayResult() {
 void setup() {
   Serial.begin(115200);
   // Log-Level pro Tag: ESP_LOG_VERBOSE / DEBUG / INFO / WARN / ERROR
-  esp_log_level_set(TAG_RAW, ESP_LOG_WARN);    // Rohdaten standardmäßig aus
+  esp_log_level_set(TAG_RAW, ESP_LOG_VERBOSE);
   esp_log_level_set(TAG_BUS, ESP_LOG_DEBUG);   // Frame-Log: DEBUG
   esp_log_level_set(TAG_BTN, ESP_LOG_INFO);
   esp_log_level_set(TAG_CMD, ESP_LOG_INFO);
@@ -938,7 +993,9 @@ void setup() {
 
   // Handshake-Pins setzen (alle -1 = Polling-Modus)
   cartridge_config_t cart_cfg = CARTRIDGE_DEFAULT_CONFIG(I2C_NUM_0);
-  cart_cfg.handshake = { BB_WR_PIN, BB_RD_PIN, BB_CS_PIN };
+  cart_cfg.handshake.wr_pin = BB_WR_PIN;
+  cart_cfg.handshake.rd_pin = BB_RD_PIN;
+  cart_cfg.handshake.cs_pin = -1;   // CS nicht verwendet
   bb.setCartridgeConfig(cart_cfg);
 
   bb.begin();
@@ -964,6 +1021,7 @@ void setup() {
   ESP_LOGI(TAG_BB, "%s INP_P1=%02X present=%s",
                 dbg, v, cartridge_is_present() ? "JA" : "NEIN");
 
+  delay(1000);
   setState(STATE_WELCOME);
   displayWelcome();
   ESP_LOGI(TAG_BB, "Bereit");
@@ -976,25 +1034,30 @@ void loop() {
   bb.loop();
   handleButtons();
 
-  // Kein Auto-Timeout. Der Ergebnis-Screen bleibt bis zum nächsten
-  // STAT_BUSY (= nächster Test gestartet).
-
   if (!bb.isCartridgeReady()) {
     vTaskDelay(pdMS_TO_TICKS(10));
     return;
   }
 
   uint8_t id, data;
-  if (!busRead(id, data)) {
-    vTaskDelay(pdMS_TO_TICKS(1));
-    return;
+  if (busRead(id, data)) {
+    if (id != last_id || data != last_data) {
+      frame_nr++;
+      ESP_LOGD(TAG_BUS, "rceived: B%d #%lu ID=%02X DATA=%02X", BUILD_NR, frame_nr, id, data);
+      processBusFrame(id, data);
+      last_id = id; last_data = data;
+    }
   }
-  
-  // Gleichen Frame nicht doppelt verarbeiten
-  if (id == last_id && data == last_data) return;
 
-  frame_nr++;
-  ESP_LOGD(TAG_BUS, "rceived: B%d #%lu ID=%02X DATA=%02X", BUILD_NR, frame_nr, id, data);
-  processBusFrame(id, data);
-  last_id = id; last_data = data;
+  // Display erst aktualisieren wenn kein Frame aktiv
+  if (g_display_dirty) {
+    g_display_dirty = false;
+    switch (g_state) {
+      case STATE_PROBING:  displayProbing();  break;
+      case STATE_RESULT:   displayResult();   break;
+      case STATE_CAL:      displayProbing();  break;
+      case STATE_CAL_DONE: displayCalibration(); break;
+      default: break;
+    }
+  }
 }

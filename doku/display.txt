@@ -73,8 +73,8 @@
 +----+------------+-----------+-------------+------------+-----------------------------------+
 | 13 | WR         | 03        | PB1         | control    | Schreibsignal                     |
 | 14 | RD         | 04        | PB2         | control    | Lesesignal                        |
-| 15 | CS         | 05        | PB0         | control    | Chip Select                       |
-| 16 | VIN        | 01        | VCC         | control    | Versorgungsspannung/Kontrolle     |
+| 15 | CS         | 05        | PB0         | control    | shared with serial                |
+| 16 | VIN        | 01        | VCC         | control    | shared with serial                |
 +----+------------+-----------+-------------+------------+-----------------------------------+
 | 17 | CLK (PHI)  | 02        | PB3         | button     | Takt-Pin fungiert als Taster      |
 +----+------------+-----------+-------------+------------+-----------------------------------+

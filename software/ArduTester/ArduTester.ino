@@ -491,141 +491,143 @@ void ShowDiode_C(Diode_Type *Diode);
 // ================================================================
 // FOR_BRUTZELBOY: Bus-Kommunikation und Kommandoempfang
 //
-// Pin-Belegung Handshake:
-//   PC4 (CARD_WR) - ATmega → ESP32: "Frame bereit" Strobe
-//   PC5 (CARD_RD) - ESP32  → ATmega: "Frame ACK"
+// Nur 2 Steuerpins — CS (PD0) wird nicht verwendet:
+//   PC4 (CARD_WR) — ATmega → ESP32: Frame-Strobe / Bereit-ACK
+//   PC5 (CARD_RD) — ESP32  → ATmega: Frame-ACK / Kommando-Trigger
 //
-// Pin-Belegung Kommando-Kanal:
-//   PD0 (CARD_CS) - ESP32  → ATmega: "Kommando pending" Flag
-//   PE0-PE3       - ESP32  → ATmega: Kommando-ID (4 Bit, 16 Kommandos)
-//   PB0-PB7       - ESP32  → ATmega: Kommando-Parameter
-//   PC4 (CARD_WR) - ATmega → ESP32: "Bereit zum Lesen"
-//   PC5 (CARD_RD) - ESP32  → ATmega: "Kommando gueltig / ACK"
+// ATmega sendet Frame:
+//   ① ID + Data auf PE0-3 / PB0-7 anlegen
+//   ② WR = HIGH  ("Frame liegt an")
+//   ③ warten auf RD = HIGH vom ESP32 (ACK, max. BB_ACK_TIMEOUT_US)
+//   ④ WR = LOW   ("Übertragung fertig")
+//   ⑤ warten auf RD = LOW (ESP32 bestätigt Ende, Timeout ignorieren)
+//   ⑥ Bus freigeben
+//
+// ESP32 sendet Kommando:
+//   ① ESP32 setzt RD = HIGH ("Kommando pending")
+//   ② ATmega-loop erkennt RD = HIGH → checkBrutzelBoyCommand()
+//   ③ ATmega schaltet Bus als Eingang, setzt WR = HIGH ("bereit")
+//   ④ ESP32 sieht WR = HIGH → legt cmd + param auf Bus
+//   ⑤ ATmega liest PINE & PINB, setzt WR = LOW ("gelesen")
+//   ⑥ ESP32 sieht WR = LOW → setzt RD = LOW, gibt Bus frei
 //
 // Kommando-Tabelle (PE0-PE3):
 //   0x0  NOP          - nichts tun
 //   0x1  START_TEST   - neuen Bauteiltest starten
-//   0x2  FREQ_METER   - Frequenzmessung (STUB - noch nicht implementiert)
-//   0x3  SIG_GEN      - Signalgenerator, Param = Frequenz-Index (s.u.)
+//   0x2  FREQ_METER   - Frequenzmessung (STUB)
+//   0x3  SIG_GEN      - Signalgenerator, Param = Frequenz-Index
 //   0x4  PWM_GEN      - PWM-Generator, Param = Duty-Cycle % (1-99, 0=STOPP)
-//   0x5  C_ESR_METER  - Kondensator+ESR-Messung (STUB - noch nicht impl.)
+//   0x5  C_ESR_METER  - Kondensator+ESR-Messung (STUB)
 //   0x6  SELF_TEST    - Kalibrierung / Selbsttest
 //   0x7  POWER_OFF    - ArduTester ausschalten (Standby)
 //   0x8-0xF  reserviert
-//
-// SIG_GEN Frequenz-Index (Param = PB0-PB7):
-//   Unterstuetzt (PWM_Tool): 0x00=100Hz, 0x01=250Hz, 0x02=500Hz,
-//     0x03=1kHz, 0x04=2.5kHz, 0x05=5kHz, 0x06=10kHz, 0x07=25kHz
-//   Nicht unterstuetzt (TODO): 0x08=50Hz, 0x09=10Hz, 0x0A=1Hz,
-//     0x0B=50kHz, 0x0C=100kHz, 0x0D=250kHz, 0x0E=500kHz,
-// SYS_STAT Werte: 0x00=IDLE, 0x01=BUSY, 0x02=DONE, 0x03=CAL, 0xFF=CAL_FEHLER
-//     0x0F=1MHz, 0x10=2MHz
-//   0xFF = Generator STOPP
 // ================================================================
 
 // Handshake-Pin-Defines
 #define BB_WR_DDR   DDRC
 #define BB_WR_PORT  PORTC
-#define BB_WR_BIT   PC4    // ATmega → ESP32: Frame/Bereit Strobe
+#define BB_WR_BIT   PC4    // ATmega → ESP32: Frame-Strobe / Bereit-ACK
 #define BB_RD_PIN   PINC
 #define BB_RD_DDR   DDRC
-#define BB_RD_BIT   PC5    // ESP32  → ATmega: ACK (Input)
-#define BB_CS_PIN   PIND
-#define BB_CS_DDR   DDRD
-#define BB_CS_BIT   PD0    // ESP32  → ATmega: Kommando pending (Input)
+#define BB_RD_BIT   PC5    // ESP32  → ATmega: Frame-ACK / Kommando-Trigger
 #define BB_BTN_PIN  PINC
 #define BB_BTN_DDR  DDRC
 #define BB_BTN_BIT  PC3    // Taster: GND = gedrückt (low-active)
 
 // Handshake-Timeout in Microsekunden (ESP32 I2C max ~1ms pro Zugriff)
-#define BB_ACK_TIMEOUT_US  5000
+#define BB_ACK_TIMEOUT_US  50000
 
 // Handshake initialisieren (in setup() aufrufen)
+#define BB_HANDSHAKE_DDR_MASK  ((1 << BB_WR_BIT))  // PC4 muss Ausgang bleiben
 void bbHandshakeInit() {
-  BB_WR_DDR  |=  (1 << BB_WR_BIT);              // PC4 Ausgang
-  BB_WR_PORT &= ~(1 << BB_WR_BIT);              // PC4 = LOW
-  BB_RD_DDR  &= ~(1 << BB_RD_BIT);              // PC5 Eingang
-  BB_CS_DDR  &= ~(1 << BB_CS_BIT);              // PD0 Eingang
-  BB_BTN_DDR &= ~(1 << BB_BTN_BIT);             // PC3 Eingang
-  PORTC      |=  (1 << BB_BTN_BIT);             // PC3 Pull-up
+  BB_WR_DDR  |=  (1 << BB_WR_BIT);   // PC4 = Ausgang
+  BB_WR_PORT &= ~(1 << BB_WR_BIT);   // PC4 = LOW (idle)
+  BB_RD_DDR  &= ~(1 << BB_RD_BIT);   // PC5 = Eingang
+  BB_BTN_DDR &= ~(1 << BB_BTN_BIT);  // PC3 = Eingang
+  PORTC      |=  (1 << BB_BTN_BIT);  // PC3 Pull-up
+  // PD0 (ehemaliger CS) wird nicht angefasst — Input by default, harmlos.
 }
 
 // Einen Frame senden mit Handshake.
 // Gibt true zurück wenn ESP32 ACK gegeben hat, false bei Timeout.
 // Port-Zustände werden gesichert damit Messwiderstände unbeeinflusst bleiben.
 bool sendToEsp(uint8_t id, uint8_t data) {
-    Serial.print(F("[BUS] ID=0x"));
-    if (id   < 0x10) Serial.print(F("0"));
-    Serial.print(id, HEX);
-    Serial.print(F(" DATA=0x"));
-    if (data < 0x10) Serial.print(F("0"));
-    Serial.println(data, HEX);
+  // Handshake-Pins sicherstellen
+  BB_WR_DDR  |= (1 << BB_WR_BIT);   // PC4 = Ausgang
+  BB_RD_DDR  &= ~(1 << BB_RD_BIT);  // PC5 = Eingang
+  Serial.print(F("[BUS] ID=0x"));
+  if (id   < 0x10) Serial.print(F("0"));
+  Serial.print(id, HEX);
+  Serial.print(F(" DATA=0x"));
+  if (data < 0x10) Serial.print(F("0"));
+  Serial.println(data, HEX);
 
   uint8_t oldDDRE  = DDRE,  oldDDRB  = DDRB;
   uint8_t oldPORTE = PORTE, oldPORTB = PORTB;
 
-  // Bus auf Ausgang, ID + Data anlegen
-  BUS_ID_DDR  |= 0x0F;
-  BUS_DATA_DDR = 0xFF;
-  BUS_ID_PORT  = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
+  // ① Bus als Ausgang, ID + Data anlegen
+  BUS_ID_DDR   |= 0x0F;
+  BUS_DATA_DDR  = 0xFF;
+  BUS_ID_PORT   = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
   BUS_DATA_PORT = data;
 
-  // WR-Strobe: "Frame bereit"
+  // ② WR = HIGH: "Frame liegt an"
   BB_WR_PORT |= (1 << BB_WR_BIT);
 
-  // Warten auf ACK vom ESP32 (PC5 HIGH), mit Timeout
+  // ③ Warten auf RD = HIGH (ACK vom ESP32), mit Timeout
   uint16_t t = 0;
   while (!(BB_RD_PIN & (1 << BB_RD_BIT))) {
     delayMicroseconds(10);
-    if (++t > (BB_ACK_TIMEOUT_US / 10)) {
-      // Timeout: Bus freigeben und abbrechen
+    if (++t > (BB_ACK_TIMEOUT_US)) {
+      // Timeout: Bus sauber freigeben
       BB_WR_PORT &= ~(1 << BB_WR_BIT);
       DDRE = oldDDRE; DDRB = oldDDRB;
       PORTE = oldPORTE; PORTB = oldPORTB;
-        Serial.println(F("[BUS] TIMEOUT"));
+      Serial.println(F("[BUS] TIMEOUT — kein ACK"));
       return false;
     }
   }
 
-  // WR LOW: Frame wird nicht mehr gehalten
+  // ④ WR = LOW: "Übertragung abgeschlossen"
   BB_WR_PORT &= ~(1 << BB_WR_BIT);
 
-  // Warten bis ESP32 ACK wieder LOW zieht (bereit für nächsten Frame)
+  // ⑤ Warten bis ESP32 RD = LOW zieht (Handshake-Ende, Timeout ignorieren)
   t = 0;
   while (BB_RD_PIN & (1 << BB_RD_BIT)) {
     delayMicroseconds(10);
-    if (++t > (BB_ACK_TIMEOUT_US / 10)) break;  // Timeout ignorieren
+    if (++t > (BB_ACK_TIMEOUT_US)) break;
   }
 
-  // Bus freigeben
+  // ⑥ Bus freigeben
   DDRE = oldDDRE; DDRB = oldDDRB;
   PORTE = oldPORTE; PORTB = oldPORTB;
 
   return true;
 }
 
-// Fallback: Frame ohne Handshake senden (z.B. wenn ESP32 nicht antwortet)
-// Benutzt feste Delays wie die urspruengliche Implementierung.
+// Fallback: Frame ohne Handshake (ESP32 antwortet nicht / Polling-Modus)
 void sendToEspNoAck(uint8_t id, uint8_t data) {
   uint8_t oldDDRE  = DDRE,  oldDDRB  = DDRB;
   uint8_t oldPORTE = PORTE, oldPORTB = PORTB;
-  BUS_ID_DDR  |= 0x0F;
-  BUS_DATA_DDR = 0xFF;
-  BUS_ID_PORT  = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
+
+  BUS_ID_DDR   |= 0x0F;
+  BUS_DATA_DDR  = 0xFF;
+  BUS_ID_PORT   = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
   BUS_DATA_PORT = data;
-  delayMicroseconds(500);        // Bus stabilisieren BEVOR WR
-  BB_WR_PORT |= (1 << BB_WR_BIT);  // WR=HIGH: "Frame bereit"
-  delayMicroseconds(8000);       // 8ms halten — ESP32 hat genug Zeit
-  BB_WR_PORT &= ~(1 << BB_WR_BIT); // WR=LOW
+
+  delayMicroseconds(500);                    // Bus stabilisieren vor WR
+  BB_WR_PORT |=  (1 << BB_WR_BIT);          // WR = HIGH
+  delayMicroseconds(8000);                   // 8ms halten (ESP32 I2C-Zyklen)
+  BB_WR_PORT &= ~(1 << BB_WR_BIT);          // WR = LOW
+
   DDRE = oldDDRE; DDRB = oldDDRB;
   PORTE = oldPORTE; PORTB = oldPORTB;
-  delayMicroseconds(1000);       // Pause zwischen Frames
+  delayMicroseconds(1000);                   // Pause zwischen Frames
 }
 
-// Frame senden: erst mit Handshake versuchen, bei Timeout Fallback
+// Primär Handshake, Fallback auf NoAck (2×) wenn kein ACK
 void sendToEspReliable(uint8_t id, uint8_t data) {
   if (!sendToEsp(id, data)) {
-    // ESP32 hat nicht geantwortet - Fallback ohne Handshake
     sendToEspNoAck(id, data);
     sendToEspNoAck(id, data);
   }
@@ -699,51 +701,41 @@ void reportComponent() {
   sendToEspReliable(0x01, pins);
 }
 
-// Kommando vom ESP32 empfangen und ausfuehren.
-// Wird am Ende jedes Messzyklus geprueft (nach DONE gesendet wurde).
-// Rueckgabe: true wenn ein Kommando ausgefuehrt wurde, das einen neuen
-// Messzyklus ausloest (START_TEST), sonst false.
+// Kommando vom ESP32 empfangen.
+// Wird in loop() aufgerufen wenn RD (PC5) = HIGH erkannt wurde.
+// Gibt true zurück wenn ein gültiges Kommando (cmd != 0x00) gelesen wurde.
 bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
-  // Kein Kommando wenn CS (PD0) nicht HIGH
-  if (!(BB_RD_PIN & (1 << BB_RD_BIT))) return false;
+  BB_WR_DDR |=  (1 << BB_WR_BIT);   // PC4 sicherstellen: Ausgang
+  BB_RD_DDR &= ~(1 << BB_RD_BIT);   // PC5 sicherstellen: Eingang
 
-  //Serial.println(F("[CMD] Kommando pending"));
-
-  // Bereit signalisieren: WR HIGH = "ATmega bereit zum Lesen"
-  BB_WR_PORT |=  (1 << BB_WR_BIT);
-
-  // Busrichtung umkehren: PE0-PE3 und PB0-PB7 als Eingang
-  uint8_t oldDDRE  = DDRE, oldDDRB  = DDRB;
+  // Bus als Eingang schalten (Ports sichern)
+  uint8_t oldDDRE  = DDRE,  oldDDRB  = DDRB;
   uint8_t oldPORTE = PORTE, oldPORTB = PORTB;
-  BUS_ID_DDR  &= ~0x0F;                          // PE0-PE3 Eingang
-  BUS_DATA_DDR = 0x00;                           // PB0-PB7 Eingang
+  BUS_ID_DDR  &= ~0x0F;   // PE0-PE3 = Eingang
+  BUS_DATA_DDR = 0x00;    // PB0-PB7 = Eingang
 
-  // Warten bis ESP32 Kommando angelegt hat (PC5 HIGH = "Kommando gueltig")
-  uint16_t t = 0;
-  while (!(BB_RD_PIN & (1 << BB_RD_BIT))) {
-    delayMicroseconds(10);
-    if (++t > (BB_ACK_TIMEOUT_US / 10)) {
-      // Timeout: abbrechen
-      BB_WR_PORT &= ~(1 << BB_WR_BIT);
-      DDRE = oldDDRE; DDRB = oldDDRB;
-      PORTE = oldPORTE; PORTB = oldPORTB;
-        //Serial.println(F("[CMD] TIMEOUT"));
-      return false;
-    }
-  }
+  // ③ WR = HIGH: "ATmega bereit zum Lesen"
+  BB_WR_PORT |= (1 << BB_WR_BIT);
 
-  // Kommando und Parameter lesen
+  // ④ Mindestverzögerung: ESP32 braucht ~1ms für I2C-Schreibzyklus
+  //    nach dem Erkennen von WR=HIGH legt er cmd+param auf den Bus.
+  delayMicroseconds(1500);
+
+  // ⑤ Bus lesen
   cmd   = PINE & 0x0F;
   param = PINB;
 
-  // Quittieren: WR LOW = "gelesen"
+  // ⑤ WR = LOW: "Kommando gelesen"
   BB_WR_PORT &= ~(1 << BB_WR_BIT);
 
-  // Warten bis ESP32 fertig (PC5 LOW)
-  t = 0;
+  // ⑥ Warten bis ESP32 RD = LOW zieht ("verstanden, Bus wird freigegeben")
+  uint16_t t = 0;
   while (BB_RD_PIN & (1 << BB_RD_BIT)) {
     delayMicroseconds(10);
-    if (++t > (BB_ACK_TIMEOUT_US / 10)) break;
+    if (++t > (BB_ACK_TIMEOUT_US)) {
+      Serial.println(F("[CMD] TIMEOUT — ESP32 hat RD nicht LOW gezogen"));
+      break;
+    }
   }
 
   // Bus wiederherstellen
@@ -751,22 +743,23 @@ bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
   PORTE = oldPORTE; PORTB = oldPORTB;
 
   Serial.print(F("[CMD] cmd=0x")); Serial.print(cmd, HEX);
-  Serial.print(F(" param=0x")); Serial.println(param, HEX);
+  Serial.print(F(" param=0x"));   Serial.println(param, HEX);
 
-  return true;
+  // NOP (0x00) nicht weiterleiten — kann durch RD-Glitch entstehen
+  return (cmd != 0x00);
 }
 
 // ================================================================
 
 //Program control
-byte                          RunsPassed;        //Counter for successful measurements
-byte                          RunsMissed;        //Counter for failed/missed measurements
-byte                          ErrFnd;            //An Error is occured
+byte                          RunsPassed;        // Counter for successful measurements
+byte                          RunsMissed;        // Counter for failed/missed measurements
+byte                          ErrFnd;            // An Error is occured
 
 //Setup function
 void setup()
 {
-  byte                        Test;              //Test value 
+  byte Test;              //Test value 
   //Disable power on spi, twi, timer2
   power_spi_disable();
   power_twi_disable();
@@ -775,7 +768,7 @@ void setup()
   //Setup ÂµC
   ADCSRA = (1 << ADEN) | ADC_CLOCK_DIV;          //Enable ADC and set clock divider 
   MCUSR &= ~(1 << WDRF);                         //Reset watchdog flag 
-  DIDR0 = 0b00110111;                              
+  DIDR0 = 0b00010111;                            // Bit 5 (ADC5/PC5 = RD) nicht deaktivieren                           
   wdt_disable();                                 //Disable watchdog 
   //Default offsets and values
   Config.Samples = ADC_SAMPLES;                  //Number of ADC samples 
@@ -998,11 +991,15 @@ void loop()
   uint8_t param = 0;
 
   if (!(BB_BTN_PIN & (1 << BB_BTN_BIT))) {
-    cmd = 0x1;
-  } else {
-    checkBrutzelBoyCommand(cmd, param);
+    // Physischer Taster gedrückt
+    cmd = 0x1;  // START_TEST
+  } else if (BB_RD_PIN & (1 << BB_RD_BIT)) {
+    // Erst prüfen ob RD stabil HIGH ist (mind. 2 Messungen)
+    delayMicroseconds(100);
+    if (BB_RD_PIN & (1 << BB_RD_BIT)) {
+      checkBrutzelBoyCommand(cmd, param);
+    }
   }
-
   // Kommando ausfuehren
   switch (cmd) {
     case 0x0:  // NOP
@@ -1044,6 +1041,7 @@ void loop()
 
     case 0x8:  // CALIBRATE - SelfAdjust + SaveEEP
       startCalibration(param);
+      break;
 
     default:
         Serial.print(F("[CMD] Unbekanntes Kommando: 0x"));
