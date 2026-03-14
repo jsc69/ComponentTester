@@ -613,10 +613,13 @@ void sendToEspNoAck(uint8_t id, uint8_t data) {
   BUS_DATA_DDR = 0xFF;
   BUS_ID_PORT  = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
   BUS_DATA_PORT = data;
-  delayMicroseconds(5000);
+  delayMicroseconds(500);        // Bus stabilisieren BEVOR WR
+  BB_WR_PORT |= (1 << BB_WR_BIT);  // WR=HIGH: "Frame bereit"
+  delayMicroseconds(8000);       // 8ms halten — ESP32 hat genug Zeit
+  BB_WR_PORT &= ~(1 << BB_WR_BIT); // WR=LOW
   DDRE = oldDDRE; DDRB = oldDDRB;
   PORTE = oldPORTE; PORTB = oldPORTB;
-  delayMicroseconds(3000);
+  delayMicroseconds(1000);       // Pause zwischen Frames
 }
 
 // Frame senden: erst mit Handshake versuchen, bei Timeout Fallback
@@ -700,11 +703,11 @@ void reportComponent() {
 // Wird am Ende jedes Messzyklus geprueft (nach DONE gesendet wurde).
 // Rueckgabe: true wenn ein Kommando ausgefuehrt wurde, das einen neuen
 // Messzyklus ausloest (START_TEST), sonst false.
-bool checkBrutzelBoyCommand() {
+bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
   // Kein Kommando wenn CS (PD0) nicht HIGH
-  if (!(BB_CS_PIN & (1 << BB_CS_BIT))) return false;
+  if (!(BB_RD_PIN & (1 << BB_RD_BIT))) return false;
 
-    Serial.println(F("[CMD] Kommando pending"));
+  //Serial.println(F("[CMD] Kommando pending"));
 
   // Bereit signalisieren: WR HIGH = "ATmega bereit zum Lesen"
   BB_WR_PORT |=  (1 << BB_WR_BIT);
@@ -724,14 +727,14 @@ bool checkBrutzelBoyCommand() {
       BB_WR_PORT &= ~(1 << BB_WR_BIT);
       DDRE = oldDDRE; DDRB = oldDDRB;
       PORTE = oldPORTE; PORTB = oldPORTB;
-        Serial.println(F("[CMD] TIMEOUT"));
+        //Serial.println(F("[CMD] TIMEOUT"));
       return false;
     }
   }
 
   // Kommando und Parameter lesen
-  uint8_t cmd   = PINE & 0x0F;
-  uint8_t param = PINB;
+  cmd   = PINE & 0x0F;
+  param = PINB;
 
   // Quittieren: WR LOW = "gelesen"
   BB_WR_PORT &= ~(1 << BB_WR_BIT);
@@ -747,125 +750,10 @@ bool checkBrutzelBoyCommand() {
   DDRE = oldDDRE; DDRB = oldDDRB;
   PORTE = oldPORTE; PORTB = oldPORTB;
 
-    Serial.print(F("[CMD] cmd=0x")); Serial.print(cmd, HEX);
-    Serial.print(F(" param=0x")); Serial.println(param, HEX);
+  Serial.print(F("[CMD] cmd=0x")); Serial.print(cmd, HEX);
+  Serial.print(F(" param=0x")); Serial.println(param, HEX);
 
-  // Kommando ausfuehren
-  switch (cmd) {
-
-    case 0x0:  // NOP
-      break;
-
-    case 0x1:  // START_TEST - neuen Bauteiltest starten
-      return true;                               // Hauptloop neu starten
-
-    case 0x2:  // FREQ_METER - Frequenzmessung
-      // STUB: Frequenzmessung noch nicht implementiert
-        Serial.println(F("[CMD] FREQ_METER: nicht implementiert"));
-      sendToEspReliable(0x0A, 0x01);            // MSG: No part (Platzhalter)
-      break;
-
-    case 0x3: {  // SIG_GEN - Signalgenerator
-      // Frequenztabelle gemaess Protokoll:
-      //   0x00=1Hz, 0x01=10Hz, 0x02=50Hz, 0x03=100Hz, 0x04=250Hz,
-      //   0x05=500Hz, 0x06=1kHz, 0x07=2.5kHz, 0x08=5kHz, 0x09=10kHz,
-      //   0x0A=25kHz, 0x0B=50kHz, 0x0C=100kHz, 0x0D=250kHz,
-      //   0x0E=500kHz, 0x0F=1MHz, 0x10=2MHz
-      //   0xFF = STOPP
-      if (param == 0xFF) {
-        // Generator stoppen: Timer deaktivieren
-        TCCR1B = 0; TCCR1A = 0; R_DDR = 0;
-        break;
-      }
-      // Von PWM_Tool() unterstuetzte Indizes (100Hz - 25kHz):
-      //   Protokoll 0x03=100Hz → PWM_Freq_table[0]
-      //   Protokoll 0x04=250Hz → PWM_Freq_table[1]
-      //   Protokoll 0x05=500Hz → PWM_Freq_table[2]
-      //   Protokoll 0x06=1kHz  → PWM_Freq_table[3]
-      //   Protokoll 0x07=2.5kHz→ PWM_Freq_table[4]
-      //   Protokoll 0x08=5kHz  → PWM_Freq_table[5]
-      //   Protokoll 0x09=10kHz → PWM_Freq_table[6]
-      //   Protokoll 0x0A=25kHz → PWM_Freq_table[7]
-      if (param >= 0x03 && param <= 0x0A) {
-        unsigned int freq = PWM_Freq_table[param - 0x03];
-        PWM_Tool(freq);
-      } else {
-        // TODO: Frequenzen ausserhalb PWM_Tool-Bereich (1Hz-50Hz, >25kHz)
-        // Protokoll-Indizes 0x00-0x02 (1Hz, 10Hz, 50Hz) und
-        // 0x0B-0x10 (50kHz-2MHz) noch nicht implementiert
-          Serial.print(F("[CMD] SIG_GEN: Frequenz-Index 0x"));
-          Serial.print(param, HEX);
-          Serial.println(F(" nicht unterstuetzt"));
-      }
-      break;
-    }
-
-    case 0x4:  // PWM_GEN - PWM mit variablem Duty-Cycle
-      // param = Duty-Cycle in % (1-99), 0 = STOPP
-      // TODO: PWM_Tool() erweitern um Duty-Cycle-Parameter
-      // Aktuell: param wird empfangen aber ignoriert, 50% fest
-      if (param == 0x00) {
-        TCCR1B = 0; TCCR1A = 0; R_DDR = 0;      // STOPP
-      } else if (param >= 1 && param <= 99) {
-        // TODO: PWM_Tool_WithDuty(freq, param) implementieren
-        // Vorlaeufig: 1kHz mit festem 50% Duty-Cycle
-          Serial.print(F("[CMD] PWM_GEN: Duty-Cycle "));
-          Serial.print(param); Serial.println(F("% (TODO: wird noch ignoriert)"));
-        PWM_Tool(1000);
-      }
-      break;
-
-    case 0x5:  // C_ESR_METER - Kondensator + ESR Messung
-      // STUB: ESR-Messung noch nicht implementiert
-        Serial.println(F("[CMD] C_ESR_METER: nicht implementiert"));
-      break;
-
-    case 0x6:  // SELF_TEST - Kalibrierung / Selbsttest
-      SelfTest();
-      break;
-
-    case 0x7:  // POWER_OFF - Standby
-      wdt_disable();
-      Serial.println(F("[CMD] POWER_OFF"));
-      set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-      sleep_enable();
-      sleep_cpu();
-      sleep_disable();
-      break;
-
-    case 0x8: {  // CALIBRATE - SelfAdjust + SaveEEP
-      Serial.println(F("[CMD] CALIBRATE"));
-      sendToEspReliable(0x0E, 0x03);               // STAT_CAL
-      byte calResult = SelfAdjust();
-      if (calResult) SaveEEP();
-      // Kalibrierwerte senden: VAL1=RiL, VAL2=RiH, VAL3=RZero, VAL4=CapZero+Offsets
-      sendToEspReliable(0x0B, 0x00);               // UNIT: keine Einheit
-      sendToEspReliable(0x02, lowByte(Config.RiL));
-      sendToEspReliable(0x03, highByte(Config.RiL));
-      sendToEspReliable(0x0B, 0x00);
-      sendToEspReliable(0x04, lowByte(Config.RiH));
-      sendToEspReliable(0x05, highByte(Config.RiH));
-      sendToEspReliable(0x0B, 0x00);
-      sendToEspReliable(0x06, lowByte(Config.RZero));
-      sendToEspReliable(0x07, highByte(Config.RZero));
-      // VAL4: LO=CapZero, HI=RefOffset+128 (signed→unsigned), extra: CompOffset+128 in TEXT_MSG
-      sendToEspReliable(0x0B, 0x00);
-      sendToEspReliable(0x08, Config.CapZero);
-      sendToEspReliable(0x09, (uint8_t)(Config.RefOffset + 128));
-      // CompOffset als extra DATA in TEXT_MSG (0x0A), Wert +128
-      sendToEspReliable(0x0A, (uint8_t)(Config.CompOffset + 128));
-      // Status: OK=0x02, Fehler=0x03
-      sendToEspReliable(0x0E, calResult ? 0x02 : 0xFF);
-      break;
-    }
-
-    default:
-        Serial.print(F("[CMD] Unbekanntes Kommando: 0x"));
-        Serial.println(cmd, HEX);
-      break;
-  }
-
-  return false;
+  return true;
 }
 
 // ================================================================
@@ -909,20 +797,8 @@ void setup()
   delay(100);
 }
 
-//Main loop
-void loop()
-{
-  byte Test;
-    // Warten auf Button (PC3 low-active) oder CMD_START_TEST vom ESP32
-    Test = 1;  // Default: Test starten wenn Signal kommt
-    sendToEspReliable(0x0E, 0x00);               // STATUS: IDLE
-    while (true) {
-      if (!(BB_BTN_PIN & (1 << BB_BTN_BIT))) break;  // PC3 LOW = Button gedrückt
-      if (checkBrutzelBoyCommand()) break;            // CMD_START_TEST empfangen
-      delay(200);
-      sendToEspReliable(0x0E, 0x00);               // STATUS: IDLE wiederholen
-    }
-  //Reset variables
+void startTest() {
+  // ── Variablen zurücksetzen ────────────────────────────────────
   Check.Found = COMP_NONE;
   Check.Type = 0;
   Check.Done = 0;
@@ -930,159 +806,250 @@ void loop()
   Check.Resistors = 0;
   BJT.hFE = 0;
   BJT.I_CE0 = 0;
-    sendToEspReliable(0x0E, 0x00);               // STATUS: IDLE
-  //Reset hardware
-  SetADCHiz();                                   //Set all pins of ADC port as input  
-  lcd_clear();                                   //Clear LCD
-  //Internal bandgap reference
-  Config.U_Bandgap = ReadU(0x0e);                //Dummy read for bandgap stabilization 
-  Config.Samples = 200;                          //Do a lot of samples for high accuracy 
-  Config.U_Bandgap = ReadU(0x0e);                //Get voltage of bandgap reference 
-  Config.Samples = ADC_SAMPLES;                  //Set samples back to default 
-  Config.U_Bandgap += Config.RefOffset;          //Add voltage offset 
+
+  // ── BUSY senden — sofort, bevor irgendwas gemessen wird ──────
+  // BrutzelBoy wechselt damit in den Mess-Screen.
+  sendToEspReliable(0x0E, 0x01);               // STATUS: BUSY
+  sendToEspReliable(0x0A, 0x04);               // MSG: Probing...
+
+  // ── Hardware-Reset ────────────────────────────────────────────
+  SetADCHiz();
+  lcd_clear();
+  Config.U_Bandgap = ReadU(0x0e);
+  Config.Samples = 200;
+  Config.U_Bandgap = ReadU(0x0e);
+  Config.Samples = ADC_SAMPLES;
+  Config.U_Bandgap += Config.RefOffset;
+
+  // ── Messen ───────────────────────────────────────────────────
+  if (AllProbesShorted() == 3)
   {
-    if (AllProbesShorted() == 3)                 //All probes Shorted!
+    Serial.println();
+    lcd_fixed_string(Remove_str);
+    lcd_line(2);
+    lcd_fixed_string(ShortCircuit_str);
+    sendToEspReliable(0x0A, 0x02);         // MSG: Short Circuit!
+  }
+  else
+  {
+    lcd_line(2);
+    lcd_fixed_string(Running_str);
+    DischargeProbes();
+    if (Check.Found == COMP_ERROR)
+    {
+      lcd_fixed_string(DischargeFailed_str);
+      lcd_line(2);
+      lcd_testpin(Check.Probe);
+      lcd_data(':');
+      lcd_space();
+      DisplayValue(Check.U, -3, 'V');
+      sendToEspReliable(0x0A, 0x01);       // MSG: No part found
+    }
+    else
+    {
+      CheckProbes(TP1, TP2, TP3);
+      CheckProbes(TP2, TP1, TP3);
+      CheckProbes(TP1, TP3, TP2);
+      CheckProbes(TP3, TP1, TP2);
+      CheckProbes(TP2, TP3, TP1);
+      CheckProbes(TP3, TP2, TP1);
+      if ((Check.Found == COMP_NONE) ||
+          (Check.Found == COMP_RESISTOR))
       {
-          Serial.println();
-        lcd_fixed_string(Remove_str);            //Display: Remove/Create
-        lcd_line(2);
-        lcd_fixed_string(ShortCircuit_str);      //Display: short circuit! 
+        Serial.println();
+        Serial.println(X("Wait a moment..."));
+        MeasureCap(TP3, TP1, 0);
+        MeasureCap(TP3, TP2, 1);
+        MeasureCap(TP2, TP1, 2);
       }
-      else
+      lcd_clear();
+      Serial.print("Found: ");
+      switch (Check.Found)
       {
-        //Display start of probing
-        lcd_line(2);                             //Move to line #2
-        lcd_fixed_string(Running_str);           //Display: probing...
-          sendToEspReliable(0x0E, 0x01);         // STATUS: BUSY
-          sendToEspReliable(0x0A, 0x04);         // MSG: Probing...
-        DischargeProbes();
-        if (Check.Found == COMP_ERROR)           //Discharge failed
-        {                                        //Only for Standalone Version!                                     
-          lcd_fixed_string(DischargeFailed_str); //Display: Battery?
-          //Display probe number and remaining voltage
-          lcd_line(2);
-          lcd_testpin(Check.Probe);
-          lcd_data(':');
-          lcd_space();
-          DisplayValue(Check.U, -3, 'V');
-        }
-        else                                     //Skip all other checks
-        {
-          //Check all 6 combinations of the 3 probes
-          CheckProbes(TP1, TP2, TP3);
-          CheckProbes(TP2, TP1, TP3);
-          CheckProbes(TP1, TP3, TP2);
-          CheckProbes(TP3, TP1, TP2);
-          CheckProbes(TP2, TP3, TP1);
-          CheckProbes(TP3, TP2, TP1);
-          //If component might be a capacitor
-          if ((Check.Found == COMP_NONE) ||
-              (Check.Found == COMP_RESISTOR))
-          {
-              Serial.println();
-              Serial.println(X("Wait a moment..."));
-            //Check all possible combinations
-            MeasureCap(TP3, TP1, 0);
-            MeasureCap(TP3, TP2, 1);
-            MeasureCap(TP2, TP1, 2);
-          }
-          //Clear LCD
-          lcd_clear();
-          //Call output function based on component type
-            Serial.print("Found: ");
-            //Components ID's
-            switch (Check.Found)
-            {
-              case COMP_ERROR:
-                Serial.println(X("Component Error!"));
-                break;
-              case COMP_NONE:
-                Serial.println(X("No Component!"));
-                break;
-              case COMP_RESISTOR:
-                Serial.println(X("Resistor"));
-                break;
-              case COMP_CAPACITOR:
-                Serial.println(X("Capacitor"));
-                break;
-              case COMP_INDUCTOR:
-                Serial.println(X("Inductor"));
-                break;
-              case COMP_DIODE:
-                Serial.println(X("Diode"));
-                break;
-              case COMP_BJT:
-                Serial.println(X("BJT"));
-                break;
-              case COMP_FET:
-                Serial.println(X("FET"));
-                break;
-              case COMP_IGBT:
-                Serial.println(X("IGBT"));
-                break;
-              case COMP_TRIAC:
-                Serial.println(X("TRIAC"));
-                break;
-              case COMP_THYRISTOR:
-                Serial.println(X("Thyristor"));
-                break;
-            }
-            reportComponent();                   // TYPE + PINS senden
-          switch (Check.Found)
-          {
-            case COMP_ERROR:
-              ShowError();
-              break;
-            case COMP_DIODE:
-              ShowDiode();
-              break;
-            case COMP_BJT:
-              ShowBJT();
-              break;
-            case COMP_FET:
-              ShowFET();
-              break;
-            case COMP_IGBT:
-              ShowIGBT();
-              break;
-            case COMP_THYRISTOR:
-              ShowSpecial();
-              break;
-            case COMP_TRIAC:
-              ShowSpecial();
-              break;
-            case COMP_RESISTOR:
-              ShowResistor();
-              break;
-            case COMP_CAPACITOR:
-              ShowCapacitor();
-              break;
-            default:                             //No component found
-              ShowFail();
-          }
-            sendToEspReliable(0x0E, 0x02);       // STATUS: DONE
-            // Warten auf CMD_START_TEST vom ESP32 (Button-Druck)
-            // checkBrutzelBoyCommand() gibt true zurueck wenn START_TEST empfangen
-            {
-              bool start = false;
-              while (!start) {
-                sendToEspReliable(0x0E, 0x02);   // STATUS: DONE wiederholen
-                start = checkBrutzelBoyCommand();
-                if (!start) {
-                  // Physischen Button (PC3, low-active) abfragen
-                  if (!(BB_BTN_PIN & (1 << BB_BTN_BIT))) start = true;
-                  else delay(200);
-                }
-              }
-            }
-          //Component was found
-          RunsMissed = 0;                        //Reset counter
-          RunsPassed++;                          //Increase counter
-        }
-     }
-  }  
-  delay(1000);                                   //Let the user read the text
-  wdt_disable();                                 //Disable watchdog
+        case COMP_ERROR:     Serial.println(X("Component Error!")); break;
+        case COMP_NONE:      Serial.println(X("No Component!"));    break;
+        case COMP_RESISTOR:  Serial.println(X("Resistor"));         break;
+        case COMP_CAPACITOR: Serial.println(X("Capacitor"));        break;
+        case COMP_INDUCTOR:  Serial.println(X("Inductor"));         break;
+        case COMP_DIODE:     Serial.println(X("Diode"));            break;
+        case COMP_BJT:       Serial.println(X("BJT"));              break;
+        case COMP_FET:       Serial.println(X("FET"));              break;
+        case COMP_IGBT:      Serial.println(X("IGBT"));             break;
+        case COMP_TRIAC:     Serial.println(X("TRIAC"));            break;
+        case COMP_THYRISTOR: Serial.println(X("Thyristor"));        break;
+      }
+
+      // ── Messdaten senden ──────────────────────────────────
+      reportComponent();                   // TYPE + PINS
+      switch (Check.Found)
+      {
+        case COMP_ERROR:     ShowError();    break;
+        case COMP_DIODE:     ShowDiode();    break;
+        case COMP_BJT:       ShowBJT();      break;
+        case COMP_FET:       ShowFET();      break;
+        case COMP_IGBT:      ShowIGBT();     break;
+        case COMP_THYRISTOR: ShowSpecial();  break;
+        case COMP_TRIAC:     ShowSpecial();  break;
+        case COMP_RESISTOR:  ShowResistor(); break;
+        case COMP_CAPACITOR: ShowCapacitor();break;
+        default:             ShowFail();     break;
+      }
+
+      // ── DONE senden — einmalig, kein Spam ─────────────────
+      // BrutzelBoy wechselt zum Ergebnis-Screen und bleibt dort.
+      // Danach läuft loop() neu und wartet stumm auf den nächsten Start.
+      sendToEspReliable(0x0E, 0x02);         // STATUS: DONE
+
+      RunsMissed = 0;
+      RunsPassed++;
+    }
+  }
+  delay(500);
+  wdt_disable();
+}
+
+void startFrequencyCounter(uint8_t param) {
+  // STUB: Frequenzmessung noch nicht implementiert
+  Serial.println(F("[CMD] FREQ_METER: nicht implementiert"));
+  //sendToEspReliable(0x0A, 0x01);            // MSG: No part (Platzhalter)
+}
+
+void signalGenerator(uint8_t param) {
+  // Frequenztabelle gemaess Protokoll:
+  //   0x00=1Hz, 0x01=10Hz, 0x02=50Hz, 0x03=100Hz, 0x04=250Hz,
+  //   0x05=500Hz, 0x06=1kHz, 0x07=2.5kHz, 0x08=5kHz, 0x09=10kHz,
+  //   0x0A=25kHz, 0x0B=50kHz, 0x0C=100kHz, 0x0D=250kHz,
+  //   0x0E=500kHz, 0x0F=1MHz, 0x10=2MHz
+  //   0xFF = STOPP
+  if (param == 0xFF) {
+    // Generator stoppen: Timer deaktivieren
+    TCCR1B = 0; TCCR1A = 0; R_DDR = 0;
+    return;
+  }
+  // Von PWM_Tool() unterstuetzte Indizes (100Hz - 25kHz):
+  //   Protokoll 0x03=100Hz → PWM_Freq_table[0]
+  //   Protokoll 0x04=250Hz → PWM_Freq_table[1]
+  //   Protokoll 0x05=500Hz → PWM_Freq_table[2]
+  //   Protokoll 0x06=1kHz  → PWM_Freq_table[3]
+  //   Protokoll 0x07=2.5kHz→ PWM_Freq_table[4]
+  //   Protokoll 0x08=5kHz  → PWM_Freq_table[5]
+  //   Protokoll 0x09=10kHz → PWM_Freq_table[6]
+  //   Protokoll 0x0A=25kHz → PWM_Freq_table[7]
+  if (param >= 0x03 && param <= 0x0A) {
+    unsigned int freq = PWM_Freq_table[param - 0x03];
+    PWM_Tool(freq);
+  } else {
+    // TODO: Frequenzen ausserhalb PWM_Tool-Bereich (1Hz-50Hz, >25kHz)
+    // Protokoll-Indizes 0x00-0x02 (1Hz, 10Hz, 50Hz) und
+    // 0x0B-0x10 (50kHz-2MHz) noch nicht implementiert
+      Serial.print(F("[CMD] SIG_GEN: Frequenz-Index 0x"));
+      Serial.print(param, HEX);
+      Serial.println(F(" nicht unterstuetzt"));
+  }
+}
+
+void pwmGenerator(int8_t param) {
+  // param = Duty-Cycle in % (1-99), 0 = STOPP
+  // TODO: PWM_Tool() erweitern um Duty-Cycle-Parameter
+  // Aktuell: param wird empfangen aber ignoriert, 50% fest
+  if (param == 0x00) {
+    TCCR1B = 0; TCCR1A = 0; R_DDR = 0;      // STOPP
+  } else if (param >= 1 && param <= 99) {
+    // TODO: PWM_Tool_WithDuty(freq, param) implementieren
+    // Vorlaeufig: 1kHz mit festem 50% Duty-Cycle
+      Serial.print(F("[CMD] PWM_GEN: Duty-Cycle "));
+      Serial.print(param); Serial.println(F("% (TODO: wird noch ignoriert)"));
+    PWM_Tool(1000);
+  }
+}
+
+void startCalibration(uint8_t param) {
+  Serial.println(F("[CMD] CALIBRATE"));
+  sendToEspReliable(0x0E, 0x03);               // STAT_CAL
+  byte calResult = SelfAdjust();
+  if (calResult) SaveEEP();
+  // Kalibrierwerte senden: VAL1=RiL, VAL2=RiH, VAL3=RZero, VAL4=CapZero+Offsets
+  sendToEspReliable(0x0B, 0x00);               // UNIT: keine Einheit
+  sendToEspReliable(0x02, lowByte(Config.RiL));
+  sendToEspReliable(0x03, highByte(Config.RiL));
+  sendToEspReliable(0x0B, 0x00);
+  sendToEspReliable(0x04, lowByte(Config.RiH));
+  sendToEspReliable(0x05, highByte(Config.RiH));
+  sendToEspReliable(0x0B, 0x00);
+  sendToEspReliable(0x06, lowByte(Config.RZero));
+  sendToEspReliable(0x07, highByte(Config.RZero));
+  // VAL4: LO=CapZero, HI=RefOffset+128 (signed→unsigned), extra: CompOffset+128 in TEXT_MSG
+  sendToEspReliable(0x0B, 0x00);
+  sendToEspReliable(0x08, Config.CapZero);
+  sendToEspReliable(0x09, (uint8_t)(Config.RefOffset + 128));
+  // CompOffset als extra DATA in TEXT_MSG (0x0A), Wert +128
+  sendToEspReliable(0x0A, (uint8_t)(Config.CompOffset + 128));
+  // Ergebnis: MSG_CAL_DONE (0x08) = OK, STAT_CAL_ERR (0xFF) = Fehler
+  if (calResult)
+    sendToEspReliable(0x0A, 0x08);   // MSG_CAL_DONE via TEXT_MSG
+  else
+    sendToEspReliable(0x0E, 0xFF);   // STAT_CAL_ERR via SYS_STAT
+}
+
+//Main loop
+void loop()
+{
+  uint8_t cmd = 0;
+  uint8_t param = 0;
+
+  if (!(BB_BTN_PIN & (1 << BB_BTN_BIT))) {
+    cmd = 0x1;
+  } else {
+    checkBrutzelBoyCommand(cmd, param);
+  }
+
+  // Kommando ausfuehren
+  switch (cmd) {
+    case 0x0:  // NOP
+      break;
+
+    case 0x1:  // START_TEST - neuen Bauteiltest starten
+      startTest();
+      break;
+
+    case 0x2:  // FREQ_METER - Frequenzmessung
+      startFrequencyCounter(param);
+      break;
+
+    case 0x3:  // SIG_GEN - Signalgenerator
+      signalGenerator(param);
+      break;
+
+    case 0x4:  // PWM_GEN - PWM mit variablem Duty-Cycle
+      pwmGenerator(param);
+      break;
+
+    case 0x5:  // C_ESR_METER - Kondensator + ESR Messung
+      // STUB: ESR-Messung noch nicht implementiert
+        Serial.println(F("[CMD] C_ESR_METER: nicht implementiert"));
+      break;
+
+    case 0x6:  // SELF_TEST - Kalibrierung / Selbsttest
+      SelfTest();
+      break;
+
+    case 0x7:  // POWER_OFF - Standby
+      wdt_disable();
+      Serial.println(F("[CMD] POWER_OFF"));
+      set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+      sleep_enable();
+      sleep_cpu();
+      sleep_disable();
+      break;
+
+    case 0x8:  // CALIBRATE - SelfAdjust + SaveEEP
+      startCalibration(param);
+
+    default:
+        Serial.print(F("[CMD] Unbekanntes Kommando: 0x"));
+        Serial.println(cmd, HEX);
+      break;
+  }
 }
 
 //Set ADC port to HiZ mode 
@@ -4346,6 +4313,7 @@ byte SelfAdjust(void)
   unsigned int                U_RiH = 0;         //Sum of U_RiL values 
   unsigned long               Val0;              //Temp. value 
   //Measurements
+  sendToEspReliable(0x0A, 0x06);               // MSG_SHORT_CREATE — immer anzeigen
   ShortCircuit(1);                               //Make sure all probes are shorted 
   while (Test <= 5)
   {
@@ -4549,6 +4517,7 @@ byte SelfAdjust(void)
     }
   }
   //Show values and offsets
+  sendToEspReliable(0x0A, 0x07);               // MSG_SHORT_REMOVE — immer anzeigen
   Serial.println(F("[CAL] Done"));
   if (Flag == 4) Flag = 1;                       //All adjustments done -> success
   else Flag = 0;                                 //Signal error

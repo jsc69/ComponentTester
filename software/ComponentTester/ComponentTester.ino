@@ -28,6 +28,17 @@
 //  INCLUDES
 // ════════════════════════════════════════════════════════════════
 #include <Brutzelboy.h>   // bringt display.h (SCREEN_WIDTH/HEIGHT), input.h, cartridge.h
+#include "esp_log.h"
+
+// ════════════════════════════════════════════════════════════════
+//  LOGGING TAGS
+// ════════════════════════════════════════════════════════════════
+static const char* TAG_BB  = "BB";     // allgemein / setup
+static const char* TAG_BUS = "BUS";    // Bus-Frames / Protokoll
+static const char* TAG_BTN = "BTN";    // Buttons
+static const char* TAG_CMD = "CMD";    // Kommandos zum ATmega
+static const char* TAG_CAL = "CAL";    // Kalibrierung
+static const char* TAG_RAW = "RAW";    // Rohdaten (verbose)
 
 // ════════════════════════════════════════════════════════════════
 //  BUS-PROTOKOLL IDs
@@ -47,7 +58,7 @@
 #define BUS_ID_BATT_LO    0x0C
 #define BUS_ID_BATT_HI    0x0D
 #define BUS_ID_SYS_STAT   0x0E
-#define BUS_ID_SYNC       0x0F
+#define BUS_ID_free       0x0F
 
 // TYPE-Codes
 #define TYPE_BJT_NPN      0x01
@@ -76,8 +87,8 @@
 #define MSG_SHORT        0x05
 #define MSG_SHORT_CREATE 0x06   // "Testpins kurzschließen"
 #define MSG_SHORT_REMOVE 0x07   // "Kurzschluss entfernen"
-#define MSG_RESISTOR     0x08
-#define MSG_NONE         0x09
+#define MSG_CAL_DONE     0x08   // Kalibrierung erfolgreich
+#define MSG_CAL_COMP     0x09   // CompOffset-Wert folgt (nicht als Display-MSG)
 
 // SYS_STAT-Codes
 #define STAT_IDLE    0x00
@@ -136,6 +147,19 @@
 #define C_DKGREY  0x2104
 
 // ════════════════════════════════════════════════════════════════
+//  ZUSTANDSMASCHINE
+// ════════════════════════════════════════════════════════════════
+enum AppState {
+  STATE_WELCOME,   // Startup: warte auf Button A oder B
+  STATE_IDLE,      // Wartet auf Messung
+  STATE_PROBING,   // Messung läuft
+  STATE_RESULT,    // Ergebnis wird angezeigt
+  STATE_CAL,       // Kalibrierung läuft
+  STATE_CAL_DONE,  // Kalibrierung fertig (OK oder ERR)
+};
+AppState g_state = STATE_WELCOME;
+
+// ════════════════════════════════════════════════════════════════
 //  DATENSPEICHER
 // ════════════════════════════════════════════════════════════════
 struct BusData {
@@ -145,7 +169,6 @@ struct BusData {
   uint8_t  val1_unit = 0,  val2_unit = 0,  val3_unit = 0,  val4_unit = 0;
   uint8_t  text_msg  = 0;
   uint16_t batt_mv   = 0;
-  uint8_t  sys_stat  = STAT_IDLE;
   uint16_t cal_RiL   = 0;
   uint16_t cal_RiH   = 0;
   uint16_t cal_RZero = 0;
@@ -153,17 +176,15 @@ struct BusData {
   int8_t   cal_Ref   = 0;
   int8_t   cal_Comp  = 0;
   bool     cal_ok    = false;
-  bool     fresh     = false;
 };
 
 BusData  g_bus;
-uint32_t g_result_shown_at = 0;
-uint8_t  g_pending_unit    = 0;
-uint8_t  g_val_write_idx   = 0;
-uint8_t  last_id   = 0xFF;
-uint8_t  last_data = 0xFF;
-uint32_t frame_nr  = 0;
-uint16_t last_keys = 0;
+uint8_t  g_pending_unit = 0;
+uint8_t  last_id        = 0xFF;
+uint8_t  last_data      = 0xFF;
+uint32_t frame_nr       = 0;
+uint16_t last_keys      = 0;
+uint32_t g_state_since  = 0;   // millis() beim letzten State-Wechsel
 
 // ════════════════════════════════════════════════════════════════
 //  BRUTZELBOY-INSTANZ
@@ -188,7 +209,7 @@ bool busRead(uint8_t &id_out, uint8_t &data_out) {
 
   static uint8_t prev_u1 = 0xFF, prev_u2 = 0xFF;
   if (u1a != prev_u1 || u2a != prev_u2) {
-    Serial.printf("[RAW] U1=%02X/%02X U2=%02X/%02X %s\n",
+    ESP_LOGV(TAG_RAW, "U1=%02X/%02X U2=%02X/%02X %s",
                   u1a, u1b, u2a, u2b, stable ? "OK" : "UNSTABIL");
     prev_u1 = u1a; prev_u2 = u2a;
   }
@@ -205,36 +226,66 @@ bool busRead(uint8_t &id_out, uint8_t &data_out) {
 //  U2.P1_6 (ATmega 5V) muss dabei HIGH bleiben!
 // ════════════════════════════════════════════════════════════════
 bool sendCommand(uint8_t cmd, uint8_t param) {
-  if (!bb.isCartridgeReady()) return false;
+  if (!bb.isCartridgeReady()) {
+    ESP_LOGW(TAG_CMD, "Cartridge not ready.");
+    return false;
+  }
 
-  // CS HIGH (P1_3) + ATmega-Power (P1_6) HIGH
-  // Dir P1_3 und P1_6 als Ausgänge sicherstellen
-  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1,    0xB7); // P1_3+P1_6 = Output
-  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x48); // P1_3=1, P1_6=1
+  // DIR: P1_6=Out(PWR), P1_3=Out(CS), P1_2=Out(RD), rest=In
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1, 0xB3);
 
-  // Kommando-ID auf ID-Bus (bank=0 → U1.P0, 4 Bit)
-  // Parameter auf Daten-Bus (bank=1 → U2.P0, 8 Bit)
-  int r = cartridge_write(0, cmd & 0x0F);
-  if (r == CARTRIDGE_OK) r = cartridge_write(1, param);
+  // Schritt 1: CS=HIGH, RD=HIGH sofort (ATmega prüft RD als Trigger)
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x4C); // P1_6=1, P1_3=1, P1_2=1
 
-  // CS LOW, ATmega-Power bleibt HIGH
-  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x40); // P1_6=1, P1_3=0
-  // P0 wieder als Input (busRead braucht das)
-  cartridge_write_reg(CARTRIDGE_ADDR_U1, AW9523_REG_DIR_P0, 0xFF);
-  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P0, 0xFF);
+  // Schritt 2: Warten auf WR=HIGH vom ATmega ("bereit zum Empfangen")
+  uint8_t u2p1;
+  uint32_t deadline = millis() + 10;
+  bool wr_seen = false;
+  while (millis() < deadline) {
+    if (cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &u2p1) == CARTRIDGE_OK
+        && (u2p1 & 0x02)) { wr_seen = true; break; }
+    delayMicroseconds(200);
+  }
+  if (!wr_seen) {
+    ESP_LOGW(TAG_CMD, "CMD: kein WR-ACK vom ATmega");
+    cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x40);
+    return false;
+  }
 
-  Serial.printf("[CMD] 0x%X param=0x%02X %s\n", cmd, param, r == CARTRIDGE_OK ? "OK" : "FEHLER");
-  return (r == CARTRIDGE_OK);
+  // Schritt 3: Kommando + Parameter auf den Bus legen
+  cartridge_write_reg(CARTRIDGE_ADDR_U1, AW9523_REG_DIR_P0,    0x00);
+  cartridge_write_reg(CARTRIDGE_ADDR_U1, AW9523_REG_OUTPUT_P0, cmd & 0x0F);
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P0,    0x00);
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P0, param);
+
+  // Schritt 4: kurz warten damit ATmega lesen kann
+  delayMicroseconds(500);
+
+  // Schritt 5: Warten bis ATmega WR=LOW zieht ("gelesen")
+  deadline = millis() + 10;
+  while (millis() < deadline) {
+    if (cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &u2p1) == CARTRIDGE_OK
+        && !(u2p1 & 0x02)) break;
+    delayMicroseconds(200);
+  }
+
+  // Schritt 6: RD=LOW, CS=LOW, Bus freigeben
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x40);
+  cartridge_write_reg(CARTRIDGE_ADDR_U1, AW9523_REG_DIR_P0,    0xFF);
+  cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P0,    0xFF);
+
+  ESP_LOGI(TAG_CMD, "CMD 0x%X param=0x%02X OK", cmd, param);
+  return true;
 }
 
-// ════════════════════════════════════════════════════════════════
-//  WERT FORMATIEREN
-// ════════════════════════════════════════════════════════════════
 char prefixChar(uint8_t p) {
   switch (p) {
-    case PREFIX_PICO:  return 'p'; case PREFIX_NANO:  return 'n';
-    case PREFIX_MICRO: return 'u'; case PREFIX_MILLI: return 'm';
-    case PREFIX_KILO:  return 'k'; case PREFIX_MEGA:  return 'M';
+    case PREFIX_PICO:  return 'p';
+    case PREFIX_NANO:  return 'n';
+    case PREFIX_MICRO: return 'u';
+    case PREFIX_MILLI: return 'm';
+    case PREFIX_KILO:  return 'k';
+    case PREFIX_MEGA:  return 'M';
     default: return ' ';
   }
 }
@@ -279,6 +330,8 @@ String formatValue(uint16_t val, uint8_t unit_byte, const char* unit_str) {
 
 // U2.P1_0 (CARD_CLK/PC3) kurz auf LOW ziehen — wie physischer ArduTester-Button
 void pulseClk() {
+  Serial.println("pulseClk should not be used");
+  
   // P1_0 als Output LOW (P1_3=CS und P1_6=PWR bleiben Output)
   cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_OUTPUT_P1, 0x40); // P1_0=0, P1_6=1, P1_3=0
   cartridge_write_reg(CARTRIDGE_ADDR_U2, AW9523_REG_DIR_P1,    0x36); // P1_0+P1_3+P1_6 Output
@@ -296,12 +349,32 @@ void handleButtons() {
   last_keys = (uint16_t)keys;
   if (!changed) return;
 
-  if (changed & (1 << INPUT_A))      { Serial.println("[BTN] A→START");    pulseClk(); }
-  if (changed & (1 << INPUT_B))      { Serial.println("[BTN] B→CALIBRATE"); sendCommand(CMD_CALIBRATE, 0x01); }
-  if (changed & (1 << INPUT_SELECT)) { Serial.println("[BTN] SEL→SIG 1k"); sendCommand(CMD_SIG_GEN,   0x06); } // 1kHz
-  if (changed & (1 << INPUT_START))  { Serial.println("[BTN] STA→SIGSTP"); sendCommand(CMD_SIG_GEN,   0xFF); } // Stop
-  if (changed & (1 << INPUT_MENU))   { Serial.println("[BTN] MENU→PWM50"); sendCommand(CMD_PWM_GEN,   50);   } // 50%
-  if (changed & (1 << INPUT_OPTION)) { Serial.println("[BTN] OPT→PWMSTP"); sendCommand(CMD_PWM_GEN,   0x00); } // Stop
+  // Button A: Test starten — CMD_START_TEST über Kommando-Kanal senden.
+  // pulseClk() war falsch: es simulierte nur den physischen Taster (PC3)
+  // und funktioniert nur wenn der ArduTester gerade in seiner Wait-Loop ist.
+  // sendCommand() ist der korrekte, zuverlässige Weg.
+  if (changed & (1 << INPUT_A)) {
+    ESP_LOGI(TAG_BTN, "A → CMD_START_TEST");
+    sendCommand(CMD_START_TEST, 0x01);
+    // Den BrutzelBoy-State ändern wir NICHT hier — das macht STAT_BUSY
+    // wenn der ArduTester bestätigt dass er den Test gestartet hat.
+  }
+
+  // Stubs für später:
+  if (changed & (1 << INPUT_B))      { ESP_LOGI(TAG_BTN, "B (STUB)");      /* TODO: sendCommand(CMD_CALIBRATE, 0x01); */ }
+  if (changed & (1 << INPUT_SELECT)) { ESP_LOGI(TAG_BTN, "SELECT (STUB)"); /* TODO */ }
+  if (changed & (1 << INPUT_START))  { ESP_LOGI(TAG_BTN, "START (STUB)");  /* TODO */ }
+  if (changed & (1 << INPUT_MENU))   { ESP_LOGI(TAG_BTN, "MENU (STUB)");   /* TODO */ }
+  if (changed & (1 << INPUT_OPTION)) { ESP_LOGI(TAG_BTN, "OPTION (STUB)"); /* TODO */ }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  STATE-MACHINE HELPER
+// ════════════════════════════════════════════════════════════════
+void setState(AppState s) {
+  ESP_LOGD(TAG_BB, "State %d→%d", (int)g_state, (int)s);
+  g_state = s;
+  g_state_since = millis();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -309,60 +382,92 @@ void handleButtons() {
 // ════════════════════════════════════════════════════════════════
 void processBusFrame(uint8_t id, uint8_t data) {
   switch (id) {
-    case BUS_ID_SYNC:
-      if (data == 0xAA) { g_bus = BusData(); g_val_write_idx = 0; g_pending_unit = 0; }
-      break;
 
+    // STATUS vom ATmega
     case BUS_ID_SYS_STAT:
-      if (data > STAT_DONE) break;
-      g_bus.sys_stat = data;
-      if (data == STAT_DONE) {
-        if (g_result_shown_at == 0) {
-          g_result_shown_at = millis();
-          if (g_bus.sys_stat == STAT_CAL) {
-            g_bus.cal_ok = true;
-            displayCalibration();
-          } else {
-            g_bus.fresh = true;
+      switch (data) {
+        case STAT_IDLE:
+          // Komplett ignorieren.
+          // Der ArduTester sendet kein IDLE mehr (wurde entfernt).
+          // Falls doch noch ein IDLE ankommt (alter Firmware-Stand,
+          // Rauschen auf dem Bus), soll es den Screen nicht verändern.
+          ESP_LOGD(TAG_BUS, "STAT_IDLE ignoriert (State=%d)", (int)g_state);
+          break;
+        case STAT_BUSY:
+          if (g_state != STATE_PROBING) {
+            g_bus = BusData();        // ← Daten zurücksetzen
+            g_pending_unit = 0;
+            last_id   = 0xFF;
+            last_data = 0xFF;
+            setState(STATE_PROBING);
+            displayProbing();
+          }
+          break;
+        case STAT_DONE:
+          // Messung fertig — Ergebnis anzeigen (nur aus Mess-Screen)
+          if (g_state == STATE_PROBING) {
+            setState(STATE_RESULT);
+            ESP_LOGI(TAG_BUS, "RESULT: type=0x%02X pins=0x%02X text=0x%02X", g_bus.type, g_bus.pins, g_bus.text_msg);
             displayResult();
           }
-        }
-      } else if (data == STAT_CAL_ERR) {
-        if (g_result_shown_at == 0) {
-          g_result_shown_at = millis();
-          g_bus.cal_ok = false;
-          displayCalibration();
-        }
-      } else if (data == STAT_CAL) {
-        g_result_shown_at = 0;
-        displayProbing();
-      } else if (data == STAT_IDLE) {
-        // Ergebnis noch 5s stehen lassen, dann Idle-Screen
-        if (g_result_shown_at == 0) {
-          displayIdle();
-        } else if (millis() - g_result_shown_at > 5000) {
-          g_result_shown_at = 0;
-          displayIdle();
-        }
-      } else if (data == STAT_BUSY) {
-        g_result_shown_at = 0;
+          break;
+        case STAT_CAL:
+          setState(STATE_CAL);
+          displayProbing();
+          break;
+        case STAT_CAL_ERR:
+          if (g_state == STATE_CAL) {
+            g_bus.cal_ok = false;
+            setState(STATE_CAL_DONE);
+            ESP_LOGW(TAG_CAL, "Kalibrierung fehlgeschlagen");
+            displayCalibration();
+          }
+          break;
       }
       break;
 
+    // Textnachrichten vom ATmega
     case BUS_ID_TEXT_MSG:
-      if (g_bus.sys_stat == STAT_CAL) {
-        if (data == MSG_SHORT_CREATE) { displayShortCircuit(true);  break; }
-        if (data == MSG_SHORT_REMOVE) { displayShortCircuit(false); break; }
-        g_bus.cal_Comp = (int8_t)(data - 128);
-      } else {
-        g_bus.text_msg = data;
-        if (data == MSG_PROBING)      { g_result_shown_at = 0; displayProbing(); }
-        if (data == MSG_SHORT_CREATE) { displayShortCircuit(true);  }
-        if (data == MSG_SHORT_REMOVE) { displayShortCircuit(false); }
+      g_bus.text_msg = data;
+      switch (data) {
+        case MSG_PROBING:
+          // MSG_PROBING nur akzeptieren wenn wir schon im Mess-Screen sind
+          // (STAT_BUSY hat ihn aufgemacht). Sonst: ignorieren.
+          // Verhindert dass MSG_PROBING beim ersten Start sofort aus dem
+          // Welcome-Screen reißt, bevor der User A gedrückt hat.
+          if (g_state == STATE_PROBING) {
+            // Screen bereits korrekt, nichts tun
+          }
+          break;
+        case MSG_SHORT_CREATE:
+          displayShortCircuit(true);
+          break;
+        case MSG_SHORT_REMOVE:
+          displayShortCircuit(false);
+          break;
+        case MSG_CAL_DONE:
+          // Kalibrierung erfolgreich abgeschlossen
+          if (g_state == STATE_CAL) {
+            g_bus.cal_ok = true;
+            setState(STATE_CAL_DONE);
+            ESP_LOGI(TAG_CAL, "OK RiL=%u RiH=%u R0=%u C0=%u Ref=%d Comp=%d",
+              g_bus.cal_RiL, g_bus.cal_RiH, g_bus.cal_RZero,
+              g_bus.cal_Cap, g_bus.cal_Ref, g_bus.cal_Comp);
+            displayCalibration();
+          }
+          break;
+        case MSG_CAL_COMP:
+          // CompOffset-Wert folgt im nächsten Frame — wird separat behandelt
+          break;
+        default:
+          g_bus.text_msg = data;
+          ESP_LOGD(TAG_BUS, "TEXT_MSG 0x%02X", data);
       }
       break;
-    case BUS_ID_TYPE:       g_bus.type = data; g_val_write_idx = 0; break;
-    case BUS_ID_PINS:       g_bus.pins = data;  break;
+
+    // Messdaten
+    case BUS_ID_TYPE:  g_bus.type = data; break;
+    case BUS_ID_PINS:  g_bus.pins = data; break;
 
     case BUS_ID_UNIT_SCALE:
       if ((data & 0x0F) <= PREFIX_MEGA) g_pending_unit = data;
@@ -371,26 +476,27 @@ void processBusFrame(uint8_t id, uint8_t data) {
     case BUS_ID_VAL1_LO: g_bus.val1  = data; break;
     case BUS_ID_VAL1_HI:
       g_bus.val1 |= ((uint16_t)data<<8); g_bus.val1_unit = g_pending_unit; g_pending_unit = 0;
-      if (g_bus.sys_stat == STAT_CAL) g_bus.cal_RiL = g_bus.val1;
+      if (g_state == STATE_CAL) g_bus.cal_RiL = g_bus.val1;
       break;
     case BUS_ID_VAL2_LO: g_bus.val2  = data; break;
     case BUS_ID_VAL2_HI:
       g_bus.val2 |= ((uint16_t)data<<8); g_bus.val2_unit = g_pending_unit; g_pending_unit = 0;
-      if (g_bus.sys_stat == STAT_CAL) g_bus.cal_RiH = g_bus.val2;
+      if (g_state == STATE_CAL) g_bus.cal_RiH = g_bus.val2;
       break;
     case BUS_ID_VAL3_LO: g_bus.val3  = data; break;
     case BUS_ID_VAL3_HI:
       g_bus.val3 |= ((uint16_t)data<<8); g_bus.val3_unit = g_pending_unit; g_pending_unit = 0;
-      if (g_bus.sys_stat == STAT_CAL) g_bus.cal_RZero = g_bus.val3;
+      if (g_state == STATE_CAL) g_bus.cal_RZero = g_bus.val3;
       break;
     case BUS_ID_VAL4_LO: g_bus.val4  = data; break;
     case BUS_ID_VAL4_HI:
       g_bus.val4 |= ((uint16_t)data<<8); g_bus.val4_unit = g_pending_unit; g_pending_unit = 0;
-      if (g_bus.sys_stat == STAT_CAL) {
+      if (g_state == STATE_CAL) {
         g_bus.cal_Cap = (uint8_t)(g_bus.val4 & 0xFF);
         g_bus.cal_Ref = (int8_t)(data - 128);
       }
       break;
+
     case BUS_ID_BATT_LO: g_bus.batt_mv  = data; break;
     case BUS_ID_BATT_HI: g_bus.batt_mv |= ((uint16_t)data<<8); break;
   }
@@ -676,6 +782,18 @@ void displayCalibration() {
   bb.updateDisplay();
 }
 
+void displayWelcome() {
+  bb.fillScreen(C_BG);
+  drawHeader("ComponentTester", 0x2945);   // Dunkelblau
+  int16_t y = HDR_H + 20;
+  bb.setFont(&FONT_8X12); bb.setTextcolor(C_VALUE);
+  bb.drawString(8, y,      "Bauteil einlegen");
+  bb.setFont(&FONT_6X8);  bb.setTextcolor(C_LABEL);
+  bb.drawString(8, y + 20, "A = Messen");
+  bb.drawString(8, y + 32, "B = Kalibrieren");
+  bb.updateDisplay();
+}
+
 void displayIdle() {
   bb.fillScreen(C_BG);
   bb.setFont(&FONT_8X12); bb.setTextcolor(C_DKGREY);
@@ -809,7 +927,14 @@ void displayResult() {
 // ════════════════════════════════════════════════════════════════
 void setup() {
   Serial.begin(115200);
-  Serial.printf("\n[BB] BUILD #%d  %s %s\n", BUILD_NR, __DATE__, __TIME__);
+  // Log-Level pro Tag: ESP_LOG_VERBOSE / DEBUG / INFO / WARN / ERROR
+  esp_log_level_set(TAG_RAW, ESP_LOG_WARN);    // Rohdaten standardmäßig aus
+  esp_log_level_set(TAG_BUS, ESP_LOG_DEBUG);   // Frame-Log: DEBUG
+  esp_log_level_set(TAG_BTN, ESP_LOG_INFO);
+  esp_log_level_set(TAG_CMD, ESP_LOG_INFO);
+  esp_log_level_set(TAG_CAL, ESP_LOG_INFO);
+  esp_log_level_set(TAG_BB,  ESP_LOG_INFO);
+  ESP_LOGI(TAG_BB, "BUILD #%d  %s %s", BUILD_NR, __DATE__, __TIME__);
 
   // Handshake-Pins setzen (alle -1 = Polling-Modus)
   cartridge_config_t cart_cfg = CARTRIDGE_DEFAULT_CONFIG(I2C_NUM_0);
@@ -827,7 +952,7 @@ void setup() {
     bb.drawString(8, 60, "AW9523B nicht gefunden");
     bb.drawString(8, 74, "I2C-Adressen pruefen");
     bb.updateDisplay();
-    Serial.println("[ERR] Cartridge init fehlgeschlagen");
+    ESP_LOGE(TAG_BB, "Cartridge init fehlgeschlagen");
     return;
   }
 
@@ -836,11 +961,12 @@ void setup() {
   cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_DIR_P0, &v);
   snprintf(dbg,sizeof(dbg),"[U1-DIAG] DIR_P0=%02X",v);
   cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P1, &v);
-  Serial.printf("%s INP_P1=%02X present=%s\n",
+  ESP_LOGI(TAG_BB, "%s INP_P1=%02X present=%s",
                 dbg, v, cartridge_is_present() ? "JA" : "NEIN");
 
-  displayIdle();
-  Serial.println("[BB] Bereit");
+  setState(STATE_WELCOME);
+  displayWelcome();
+  ESP_LOGI(TAG_BB, "Bereit");
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -850,6 +976,9 @@ void loop() {
   bb.loop();
   handleButtons();
 
+  // Kein Auto-Timeout. Der Ergebnis-Screen bleibt bis zum nächsten
+  // STAT_BUSY (= nächster Test gestartet).
+
   if (!bb.isCartridgeReady()) {
     vTaskDelay(pdMS_TO_TICKS(10));
     return;
@@ -857,14 +986,15 @@ void loop() {
 
   uint8_t id, data;
   if (!busRead(id, data)) {
-    vTaskDelay(pdMS_TO_TICKS(1));  // Andere Tasks atmen lassen
+    vTaskDelay(pdMS_TO_TICKS(1));
     return;
   }
-  if (id == 0x0F) { last_id = 0xFF; last_data = 0xFF; return; }
+  
+  // Gleichen Frame nicht doppelt verarbeiten
   if (id == last_id && data == last_data) return;
 
   frame_nr++;
-  Serial.printf("[B%d #%lu] ID=%02X DATA=%02X\n", BUILD_NR, frame_nr, id, data);
+  ESP_LOGD(TAG_BUS, "rceived: B%d #%lu ID=%02X DATA=%02X", BUILD_NR, frame_nr, id, data);
   processBusFrame(id, data);
   last_id = id; last_data = data;
 }

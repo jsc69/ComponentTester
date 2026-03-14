@@ -121,14 +121,17 @@
 | 0x8  | 1000 | VAL4_LO    | 0x00..0xFF| %         | Zusatzwert (Iceo, Ir) - LOW Byte      |
 | 0x9  | 1001 | VAL4_HI    | 0x00..0xFF| %         | Zusatzwert (Iceo, Ir) - HIGH Byte     |
 +------+------+------------+-----------+-----------+---------------------------------------+
-| 0xA  | 1010 | TEXT_MSG   | 0x01      | ....0001  | MSG: "No part found"                  |
-| 0xA  | 1010 | TEXT_MSG   | 0x02      | ....0010  | MSG: "Short Circuit!"                 |
-| 0xA  | 1010 | TEXT_MSG   | 0x03      | ....0011  | MSG: "Remove Short!"                  |
-| 0xA  | 1010 | TEXT_MSG   | 0x04      | ....0100  | MSG: "Testing..."                     |
-| 0xA  | 1010 | TEXT_MSG   | 0x05      | ....0101  | MSG: "Cell!" (Voltage source)         |
-| 0xA  | 1010 | TEXT_MSG   | 0x06      | ....0110  | MSG: "Probing..."                     |
-| 0xA  | 1010 | TEXT_MSG   | 0x07      | ....0111  | MSG: "Calibration required"           |
-| 0xA  | 1010 | TEXT_MSG   | 0x08      | ....1000  | MSG: "Timeout!"                       |
+| 0xA  | 1010 | TEXT_MSG   | 0x01      | 00000001  | MSG: "No part found"                  |
+| 0xA  | 1010 | TEXT_MSG   | 0x02      | 00000010  | MSG: "Short Circuit!"                 |
+| 0xA  | 1010 | TEXT_MSG   | 0x03      | 00000011  | MSG: "Remove Short!"                  |
+| 0xA  | 1010 | TEXT_MSG   | 0x04      | 00000100  | MSG: "Testing..."                     |
+| 0xA  | 1010 | TEXT_MSG   | 0x05      | 00000101  | MSG: "Cell!" (Voltage source)         |
+| 0xA  | 1010 | TEXT_MSG   | 0x06      | 00000110  | MSG: "Probing..."                     |
+| 0xA  | 1010 | TEXT_MSG   | 0x07      | 00000111  | MSG: "Calibration required"           |
+| 0xA  | 1010 | TEXT_MSG   | 0x08      | 00001000  | MSG: "Timeout!"                       |
+| 0xA  | 1010 | TEXT_MSG   | 0x0F      | 00001111  | MSG: ???                              |
+| 0xA  | 1010 | TEXT_MSG   | 0x1F      | 00011111  | MSG: ???                              |
+| 0xA  | 1010 | TEXT_MSG   | 0x3F      | 00111111  | MSG: ???                              |
 +------+------+------------+-----------+-----------+---------------------------------------+
 | 0xB  | 1011 | UNIT_SCALE | 0x00      | ....0000  | UNIT: None / Plain Number             |
 | 0xB  | 1011 | UNIT_SCALE | 0x01      | ....0001  | UNIT: p (pico)                        |
@@ -198,8 +201,8 @@ Connections:
 +========+==========+=========+================+
 + Vcc    | CARD_VCC |         | Power          |
 | PC3    | CARD_CLK | U2.P1_0 | Button         |
-| PC4    | CARD_WR  | U2.P1_1 | not used       |
-| PC5    | CARD_RD  | U2.P1_2 | not used       |
+| PC4    | CARD_WR  | U2.P1_1 | Handshake      |
+| PC5    | CARD_RD  | U2.P1_2 | Handshake      |
 | PD0    | CARD_CS  | U2.P1_3 | not used       |
 | PE0    | CARD_A0  | U1.P0_0 | ID.0           |
 | PE1    | CARD_A1  | U1.P0_1 | ID.1           |
@@ -240,3 +243,12 @@ Connections:
 | PD6    |          |         | TP3 (680)      |
 | PD7    |          |         | TP3 (470k)     |
 +--------+----------+---------+----------------+
+
+Tag Level   Inhalt
+BB  INFO    Setup, Init, Fehler
+BUS DEBUG   Jeder Bus-Frame (ID+Data)
+BTN INFO    Button-Drücke
+CMD INFO    Kommandos zum ATmega
+CAL INFO    Kalibrierung Start/OK/Fehler + alle Werte
+RAW WARN    Rohdaten I2C (standardmäßig aus)
+
