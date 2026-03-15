@@ -57,26 +57,26 @@
 +----+------------+-----------+-------------+------------+-----------------------------------+
 | NR | Name       | Cart-Pin  | ATmega-Port | Funktion   | Bemerkung laut Kommentar          |
 +----+------------+-----------+-------------+------------+-----------------------------------+
-| 01 | D0         | 22        | PD0         | data       | Datenbus Bit 0                    |
-| 02 | D1         | 23        | PD1         | data       | Datenbus Bit 1                    |
-| 03 | D2         | 24        | PD2         | data       | Datenbus Bit 2                    |
-| 04 | D3         | 25        | PD3         | data       | Datenbus Bit 3                    |
-| 05 | D4         | 26        | PD4         | data       | Datenbus Bit 4                    |
-| 06 | D5         | 27        | PD5         | data       | Datenbus Bit 5                    |
-| 07 | D6         | 28        | PD6         | data       | Datenbus Bit 6                    |
-| 08 | D7         | 29        | PD7         | data       | Datenbus Bit 7                    |
+| 01 | D0         | 22        | PB0         | data       | Datenbus Bit 0                    |
+| 02 | D1         | 23        | PB1         | data       | Datenbus Bit 1                    |
+| 03 | D2         | 24        | PB2         | data       | Datenbus Bit 2                    |
+| 04 | D3         | 25        | PB3         | data       | Datenbus Bit 3                    |
+| 05 | D4         | 26        | PB4         | data       | Datenbus Bit 4                    |
+| 06 | D5         | 27        | PB5         | data       | Datenbus Bit 5                    |
+| 07 | D6         | 28        | PB6         | data       | Datenbus Bit 6                    |
+| 08 | D7         | 29        | PB7         | data       | Datenbus Bit 7                    |
 +----+------------+-----------+-------------+------------+-----------------------------------+
-| 09 | A0         | 06        | PC0         | data       | Adressleitung als Daten genutzt   |
-| 10 | A1         | 07        | PC1         | data       | Adressleitung als Daten genutzt   |
-| 11 | A2         | 08        | PC2         | data       | Adressleitung als Daten genutzt   |
-| 12 | A3         | 09        | PC3         | data       | Adressleitung als Daten genutzt   |
+| 09 | A0         | 06        | PE0         | data       | Adressleitung als Daten genutzt   |
+| 10 | A1         | 07        | PE1         | data       | Adressleitung als Daten genutzt   |
+| 11 | A2         | 08        | PE2         | data       | Adressleitung als Daten genutzt   |
+| 12 | A3         | 09        | PE3         | data       | Adressleitung als Daten genutzt   |
 +----+------------+-----------+-------------+------------+-----------------------------------+
-| 13 | WR         | 03        | PB1         | control    | Schreibsignal                     |
-| 14 | RD         | 04        | PB2         | control    | Lesesignal                        |
+| 13 | WR         | 03        | PC4         | control    | Schreibsignal                     |
+| 14 | RD         | 04        | PC5         | control    | Lesesignal                        |
 | 15 | CS         | 05        | PB0         | control    | shared with serial                |
 | 16 | VIN        | 01        | VCC         | control    | shared with serial                |
 +----+------------+-----------+-------------+------------+-----------------------------------+
-| 17 | CLK (PHI)  | 02        | PB3         | button     | Takt-Pin fungiert als Taster      |
+| 17 | CLK (PHI)  | 02        | PC3         | button     | Takt-Pin fungiert als Taster      |
 +----+------------+-----------+-------------+------------+-----------------------------------+
 | 18 | RES        | 30        | PC6 (RST)   | reset      | System-Reset (Pull low to reset)  |
 +----+------------+-----------+-------------+------------+-----------------------------------+
@@ -251,4 +251,38 @@ BTN INFO    Button-Drücke
 CMD INFO    Kommandos zum ATmega
 CAL INFO    Kalibrierung Start/OK/Fehler + alle Werte
 RAW WARN    Rohdaten I2C (standardmäßig aus)
+
+Kommunikation + Handshake:
+--------------------------
+ATmega → ESP32:
+═══════════════════════════════════════════════════════
+Schritt │ ATmega (WR)          │ ESP32 (RD)           │
+────────┼──────────────────────┼──────────────────────┼
+  1     │ WR=HIGH (idle)       │ RD=HIGH (idle)       │
+  2     │ schreibt auf Bus     │                      │
+  3     │ WR=LOW               │ sieht WR=LOW         │
+  4     │                      │ RD=LOW (ACK)         │
+  5     │ wartet auf RD=LOW    │                      │
+  6     │ WR=HIGH (gültig)     │ warte auf WR=HIGH    │
+  7     │                      │ liest Bus            │
+  8     │                      │ RD=HIGH (idle)       │
+  9     │ warte auf RD=HIGH    │                      │
+  10    │ WR=HIGH (idle)       │                      │ 
+═══════════════════════════════════════════════════════
+
+ESP32 → ATmega:
+═══════════════════════════════════════════════════════
+Schritt │ ESP32 (RD)           │ ATmega (WR)          │
+────────┼──────────────────────┼──────────────────────┼
+  1     │ RD=HIGH (idle)       │ WR=HIGH (idle)       │
+  2     │ schreibt auf Bus     │                      │
+  3     │ RD=LOW               │ sieht RD=LOW         │
+  4     │                      │ WR=LOW (ACK)         │
+  5     │ warte auf WR=LOW     │                      │
+  6     │ RD=HIGH (gültig)     │ warte auf RD=HIGH    │
+  7     │                      │ liest Bus            │
+  8     │                      │ WR=HIGH (idle)       │
+  9     │ warte auf WR=HIGH    │                      │
+  10    │ RD=HIGH (idle)       │                      │
+═══════════════════════════════════════════════════════
 
