@@ -242,55 +242,53 @@ bool waitForBusIdle() {
 bool busRead(uint8_t &id_out, uint8_t &data_out) {
   uint8_t u1a, u1b, u2a, u2b, u2p;
 
-  // Nur lesen wenn ATmega WR = HIGH (U2.P1_1 = Bit 1 = 0x02)
   if (!isDataPending()) {
     id_out = 0x0F; data_out = 0xFF;
     return false;
   }
-  ESP_LOGV(TAG_RAW, "WR=HIGH erkannt, u2p1=0x%02X", u2p);
+  ESP_LOGV(TAG_RAW, "WR=LOW erkannt");
 
-  // Bus lesen (2× für Stabilität)
+  // Schritt 4: RD=LOW (ACK)
+  setAck();
+
+  // Schritt 6: warten auf WR=HIGH ("Daten gültig")
+  uint32_t loop_count = 0;
+  while (true) {
+    uint8_t p1;
+    cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &p1);
+    if (p1 & BIT_MASK_WR) break;
+    if (++loop_count % 1000 == 0)
+      ESP_LOGV(TAG_RAW, "warte auf WR=HIGH, count=%lu", loop_count);
+    delayMicroseconds(100);
+  }
+  ESP_LOGV(TAG_RAW, "WR=HIGH erkannt nach %lu Iterationen", loop_count);
+
+  // Schritt 7: Bus lesen
   if (cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P0, &u1a) != CARTRIDGE_OK ||
       cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P0, &u2a) != CARTRIDGE_OK ||
       cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P0, &u1b) != CARTRIDGE_OK ||
       cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P0, &u2b) != CARTRIDGE_OK) {
+    finishCommunication();
     id_out = 0x0F; data_out = 0xFF;
     return false;
   }
 
   bool stable = ((u1a & 0x0F) == (u1b & 0x0F)) && (u2a == u2b);
-
-  static uint8_t prev_u1 = 0xFF, prev_u2 = 0xFF;
-  if (u1a != prev_u1 || u2a != prev_u2) {
-    ESP_LOGV(TAG_RAW, "U1=%02X/%02X U2=%02X/%02X %s",
-             u1a, u1b, u2a, u2b, stable ? "OK" : "UNSTABIL");
-    prev_u1 = u1a; prev_u2 = u2a;
-  }
-
-  if (!stable) { id_out = 0x0F; data_out = 0xFF; return false; }
+  if (!stable) {
+    finishCommunication(); 
+    id_out = 0x0F; 
+    data_out = 0xFF; 
+    return false; 
+    }
 
   id_out   = u1a & 0x0F;
   data_out = u2a;
 
-  // check of garbage
-  if (id_out == 0x0F) {
-    finishCommunication();  // Bus sauber abschließen
-    return false;
-  }
-
-  setAck();
-
-  // Warten auf WR = HIGH vom ATmega — kein Timeout
-  uint32_t loop_count = 0;
-  while (true) {
-    if (!isATmegaAck()) break;
-    if (++loop_count % 10000 == 0)
-      ESP_LOGV(TAG_RAW, "warte auf WR=LOW, u2p1=0x%02X, count=%lu", u2p, loop_count);
-    delayMicroseconds(100);
-  }
-  ESP_LOGV(TAG_RAW, "WR=LOW erkannt nach %lu Iterationen", loop_count);
-
+  // Schritt 8: RD=HIGH (idle)
   finishCommunication();
+
+  if (id_out == 0x0F) return false;
+
   return true;
 }
 
