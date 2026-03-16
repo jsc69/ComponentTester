@@ -534,6 +534,11 @@ void ShowDiode_C(Diode_Type *Diode);
 #define BB_BTN_DDR  DDRC
 #define BB_BTN_BIT  PC3    // Taster: GND = gedrückt (low-active)
 
+// PORTC-Bits die nie durch ADC_DDR/ADC_PORT-Zuweisungen überschrieben werden dürfen
+#define BB_PORTC_PRESERVE  ((1<<BB_WR_BIT)|(1<<BB_RD_BIT)|(1<<BB_BTN_BIT))  // 0x38
+#define SET_ADC_DDR(x)   (ADC_DDR  = ((ADC_DDR  & BB_PORTC_PRESERVE) | ((x) & ~BB_PORTC_PRESERVE)))
+#define SET_ADC_PORT(x)  (ADC_PORT = ((ADC_PORT & BB_PORTC_PRESERVE) | ((x) & ~BB_PORTC_PRESERVE)))
+
 // Handshake-Timeout in Microsekunden (ESP32 I2C max ~1ms pro Zugriff)
 #define BB_ACK_TIMEOUT_US  50000
 
@@ -550,7 +555,7 @@ void bbHandshakeInit() {
 // Warte auf Ende der Kommunikation (BUS_IDLE)
 bool waitForBusIdle() {
   uint16_t t = 0;
-  while (BB_HANDSHAKE_PIN & (1 << BB_RD_BIT) && BB_HANDSHAKE_PIN & (1 << BB_WR_BIT)) {
+  while (BB_HANDSHAKE_PIN & (1 << BB_RD_BIT) & BB_HANDSHAKE_PIN & (1 << BB_WR_BIT)) {
     delayMicroseconds(100);
     if (++t > (BB_ACK_TIMEOUT_US)) {
       Serial.println(F("[SEND] TIMEOUT — kein BUS_IDLE"));
@@ -590,8 +595,6 @@ bool waitForEspAck() {
 // Gibt true zurück wenn ESP32 ACK gegeben hat, false bei Timeout.
 // Port-Zustände werden gesichert damit Messwiderstände unbeeinflusst bleiben.
 bool sendToEsp(uint8_t id, uint8_t data) {
-  BB_HANDSHAKE_DDR |= (1 << BB_WR_BIT);
-
   if (!waitForBusIdle()) {
     return false;
   }
@@ -605,17 +608,8 @@ bool sendToEsp(uint8_t id, uint8_t data) {
   BUS_ID_PORT   = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
   BUS_DATA_PORT = data;
 
-Serial.print(F("[SEND] id=0x")); Serial.print(id, HEX);
-Serial.print(F(" DDRC=")); Serial.print(DDRC, HEX);
-Serial.print(F(" PORTC=")); Serial.print(PORTC, HEX);
-Serial.print(F(" PINC=")); Serial.print(PINC, HEX);
-
   // WR = LOW: "Frame liegt an"
   BB_HANDSHAKE_PORT &= ~(1 << BB_WR_BIT);
-
-Serial.print(F(" → DDRC=")); Serial.print(DDRC, HEX);
-Serial.print(F(" PORTC=")); Serial.print(PORTC, HEX);
-Serial.print(F(" PINC=")); Serial.println(PINC, HEX);
 
   if (!waitForEspReady()) {
     // Timeout: Bus sauber freigeben - WR auf HIGH
@@ -719,14 +713,14 @@ bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
   uint8_t oldDDRB  = DDRB,  oldDDRE  = DDRE;
   uint8_t oldPORTB = PORTB, oldPORTE = PORTE;
   BUS_ID_DDR  &= ~0x0F;
-  BUS_DATA_DDR = 0x00;
+  SetADCHiz();   // PC0-PC2 als Eingang — lässt PC4 (WR) unberührt
 
   // Schritt 1: WR=LOW — "ATmega bereit zum Lesen"
   BB_HANDSHAKE_PORT &= ~(1 << BB_WR_BIT);
 
-  // Schritt 2: Warten auf RD=HIGH ("ESP empfangsbereit")
+  // Schritt 2: Warten auf RD=HIGH ("Daten gültig")
   uint16_t t = 0;
-  if(!waitForEspReady()) {
+  if(!waitForEspAck()) {
     Serial.println(F("[READ] TIMEOUT — kein RD=HIGH vom ESP32"));
     BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
     DDRB = oldDDRB; DDRE = oldDDRE;
@@ -737,9 +731,13 @@ bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
   // Schritt 3: Daten lesen
   cmd   = PINE & 0x0F;
   param = PINB;
+Serial.print(F("[READ] PINE=0x")); Serial.print(PINE, HEX);
+Serial.print(F(" PINB=0x")); Serial.print(PINB, HEX);
+Serial.print(F(" DDRE=0x")); Serial.println(DDRE, HEX);
 
   // Schritt 4: WR=HIGH — "Kommando gelesen, fertig"
   BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
+  waitForEspAck(); // close communication
 
   DDRB = oldDDRB; DDRE = oldDDRE;
   PORTB = oldPORTB; PORTE = oldPORTE;
@@ -996,7 +994,7 @@ void loop()
   /*
   // ── DIAGNOSE: alle 500ms Pin-Zustand loggen ──────────────────
   static uint32_t diag_last = 0;
-  if (millis() - diag_last > 500) {
+  if (millis() - diag_last > 5000) {
     diag_last = millis();
     Serial.print(F("[DIAG] PINC=0x")); Serial.print(PINC, HEX);
     Serial.print(F(" DDRC=0x")); Serial.print(DDRC, HEX);
@@ -1006,7 +1004,7 @@ void loop()
     Serial.print(F(" PINB=0x")); Serial.print(PINB, HEX);
     Serial.print(F(" PINE=0x")); Serial.println(PINE, HEX);
   }
-  //*/
+  */
 
   uint8_t cmd = 0;
   uint8_t param = 0;
@@ -1353,8 +1351,8 @@ void CheckProbes(byte Probe1, byte Probe2, byte Probe3)
   //Set probes: Gnd -- Rl -- probe-2 / probe-1 -- Vcc
   R_PORT = 0;                                    //Set resistor port to Gnd 
   R_DDR = Probes.Rl_2;                           //Pull down probe-2 via Rl 
-  ADC_DDR = Probes.ADC_1;                        //Set probe-1 to output 
-  ADC_PORT = Probes.ADC_1;                       //Pull-up probe-1 directly 
+  SET_ADC_DDR(Probes.ADC_1);                        //Set probe-1 to output 
+  SET_ADC_PORT(Probes.ADC_1);                       //Pull-up probe-1 directly 
   /*
      For a possible n channel FET we pull down the gate for a few ms,
      assuming: probe-1 = D / probe-2 = S / probe-3 = G
@@ -1408,8 +1406,8 @@ void CheckProbes(byte Probe1, byte Probe2, byte Probe3)
       //We assume: probe-1 = E / probe-2 = C / probe-3 = B, set probes: Gnd -- Rl - probe-2 / probe-1 -- Vcc
       R_DDR = Probes.Rl_2;                       //Enable Rl for probe-2
       R_PORT = 0;                                //Pull down collector via Rl
-      ADC_DDR = Probes.ADC_1;                    //Set probe 1 to output
-      ADC_PORT = Probes.ADC_1;                   //Pull up emitter directly
+      SET_ADC_DDR(Probes.ADC_1);                    //Set probe 1 to output
+      SET_ADC_PORT(Probes.ADC_1);                   //Pull up emitter directly
       delay(5);
       R_DDR = Probes.Rl_2 | Probes.Rl_3;         //Pull down base via Rl
       U_1 = ReadU_5ms(Probe2);                   //Get voltage at collector
@@ -1429,7 +1427,7 @@ void CheckProbes(byte Probe1, byte Probe2, byte Probe3)
     if (Check.Done == 0)                         //Not sure yet
     {
       //We assume: probe-1 = C / probe-2 = E / probe-3 = B, set probes: Gnd -- probe-2 / probe-1 -- Rl -- Vcc
-      ADC_DDR = Probes.ADC_2;                    //Set probe-2 to output mode 
+      SET_ADC_DDR(Probes.ADC_2);                    //Set probe-2 to output mode 
       SetADCLow();                               //Pull down probe-2 directly 
       R_DDR = Probes.Rl_1 | Probes.Rl_3;         //Select Rl for probe-1 & Rl for probe-3 
       R_PORT = Probes.Rl_1 | Probes.Rl_3;        //Pull up collector & base via Rl
@@ -1569,8 +1567,8 @@ unsigned long Get_hFE_C(byte Type)
   if (Type == TYPE_NPN)                          //NPN
   {
     //We assume: probe-1 = C / probe-2 = E / probe-3 = B, set probes: Gnd -- Rl -- probe-2 / probe-1 -- Vcc
-    ADC_DDR = Probes.ADC_1;                      //Set probe 1 to output 
-    ADC_PORT = Probes.ADC_1;                     //Pull up collector directly 
+    SET_ADC_DDR(Probes.ADC_1);                      //Set probe 1 to output 
+    SET_ADC_PORT(Probes.ADC_1);                     //Pull up collector directly 
     R_DDR = Probes.Rl_2 | Probes.Rl_3;           //Select Rl for probe-2 & Rl for probe-3 
     R_PORT = Probes.Rl_3;                        //Pull up base via Rl 
     U_R_e = ReadU_5ms(Probes.Pin_2);             //U_R_e = U_e 
@@ -1580,7 +1578,7 @@ unsigned long Get_hFE_C(byte Type)
   {
     //We assume: probe-1 = E / probe-2 = C / probe-3 = B, set probes: Gnd -- probe-2 / probe-1 -- Rl -- Vcc
     SetADCLow();                                 //Set ADC port low 
-    ADC_DDR = Probes.ADC_2;                      //Pull down collector directly 
+    SET_ADC_DDR(Probes.ADC_2);                      //Pull down collector directly 
     R_PORT = Probes.Rl_1;                        //Pull up emitter via Rl 
     R_DDR = Probes.Rl_1 | Probes.Rl_3;           //Pull down base via Rl 
     U_R_e = UREF_VCC - ReadU_5ms(Probes.Pin_1);  //U_R_e = Vcc - U_e 
@@ -1721,8 +1719,8 @@ unsigned int GetLeakageCurrent(void)
   */
   R_PORT = 0;                                    //Set resistor port to Gnd 
   R_DDR = Probes.Rl_2;                           //Pull down probe-2 via Rl 
-  ADC_DDR = Probes.ADC_1;                        //Set probe-1 to output 
-  ADC_PORT = Probes.ADC_1;                       //Pull-up probe-1 directly
+  SET_ADC_DDR(Probes.ADC_1);                        //Set probe-1 to output 
+  SET_ADC_PORT(Probes.ADC_1);                       //Pull-up probe-1 directly
   U_Rl = ReadU_5ms(Probes.Pin_2);                //Get voltage at Rl
   //Calculate current
   R_Shunt = Config.RiL + (R_LOW * 10);           //Consider internal resistance of MCU (0.1 Ohms) 
@@ -1790,7 +1788,7 @@ void CheckDiode(void)
   */
   //We assume: probe-1 = A / probe2 = C, set probes: Gnd -- probe-2 / probe-1 -- Rl or Rh -- Vcc
   SetADCLow();
-  ADC_DDR = Probes.ADC_2;                        //Pull down cathode directly
+  SET_ADC_DDR(Probes.ADC_2);                        //Pull down cathode directly
   //R_DDR is set to HiZ by DischargeProbes();
   U1_Zero = ReadU(Probes.Pin_1);                 //Get voltage at anode
   //Measure voltage across DUT (Vf) with Rh
@@ -1811,7 +1809,7 @@ void CheckDiode(void)
   //Vf #2, supporting a possible n-channel MOSFET
   //We assume: probe-1 = A / probe2 = C, set probes: Gnd -- probe-2 / probe-1 -- Rl or Rh -- Vcc
   SetADCLow();
-  ADC_DDR = Probes.ADC_2;                        //Pull down cathode directly 
+  SET_ADC_DDR(Probes.ADC_2);                        //Pull down cathode directly 
   U2_Zero = ReadU(Probes.Pin_1);                 //Get voltage at anode 
   //Measure voltage across DUT (Vf) with Rh
   R_DDR = Probes.Rh_1;                           //Enable Rh for probe-1
@@ -2067,7 +2065,7 @@ void CheckBJTorEnhModeMOSFET(byte BJT_Type, unsigned int U_Rl)
     {
       //We assume: probe-1 = E / probe-2 = C / probe-3 = B, set probes: Gnd -- probe-1 / probe-2 -- Rl -- Vcc
       SetADCLow();
-      ADC_DDR = Probes.ADC_1;                    //Pull-down emitter directly 
+      SET_ADC_DDR(Probes.ADC_1);                    //Pull-down emitter directly 
       R_PORT = Probes.Rl_2 | Probes.Rh_3;        //Pull-up base via Rh 
       R_DDR = Probes.Rl_2 | Probes.Rh_3;         //Enable probe resistors 
       U_R_b = UREF_VCC - ReadU_5ms(Probes.Pin_2);//U_R_c = Vcc - U_c        
@@ -2077,8 +2075,8 @@ void CheckBJTorEnhModeMOSFET(byte BJT_Type, unsigned int U_Rl)
       //We assume: probe-1 = C / probe-2 = E / probe-3 = B, set probes: Gnd -- Rl - probe-1 / probe-2 -- Vcc
       R_PORT = 0;
       R_DDR = Probes.Rl_1 | Probes.Rh_3;         //Pull down base via Rh
-      ADC_DDR = Probes.ADC_2;
-      ADC_PORT = Probes.ADC_2;                   //Pull-up emitter directly
+      SET_ADC_DDR(Probes.ADC_2);
+      SET_ADC_PORT(Probes.ADC_2);                   //Pull-up emitter directly
       U_R_b = ReadU_5ms(Probes.Pin_1);           //U_R_c = U_c
     }
     //If not reversed, BJT is identified
@@ -2161,7 +2159,7 @@ void CheckDepletionModeFET(unsigned int U_Rl_L)
       //Compare gate voltages to distinguish JFET from MOSFET
       //Set probes: Gnd -- probe-2 / probe-1 -- Rl -- Vcc
       SetADCLow();                               //Set ADC port to low
-      ADC_DDR = Probes.ADC_2;                    //Pull down source directly 
+      SET_ADC_DDR(Probes.ADC_2);                    //Pull down source directly 
       R_DDR = Probes.Rl_1 | Probes.Rh_3;         //Enable Rl for probe-1 & Rh for probe-3 
       R_PORT = Probes.Rl_1 | Probes.Rh_3;        //Pull up drain via Rl / pull up gate via Rh 
       U_2 = ReadU_20ms(Probes.Pin_3);            //Get voltage at gate 
@@ -2188,7 +2186,7 @@ void CheckDepletionModeFET(unsigned int U_Rl_L)
   {
     //We assume: probe-1 = S / probe-2 = D / probe-3 = G, set probes: Gnd -- probe-2 / probe-1 -- Rl -- Vcc
     SetADCLow();                                 //Set ADC port to Gnd 
-    ADC_DDR = Probes.ADC_2;                      //Pull down drain directly 
+    SET_ADC_DDR(Probes.ADC_2);                      //Pull down drain directly 
     R_DDR = Probes.Rl_1 | Probes.Rh_3;           //Enable Rl for probe-1 & Rh for probe-3 
     R_PORT = Probes.Rl_1 | Probes.Rh_3;          //Pull up source via Rl / pull up gate via Rh 
     U_1 = ReadU_20ms(Probes.Pin_1);              //Get voltage at source 
@@ -2204,8 +2202,8 @@ void CheckDepletionModeFET(unsigned int U_Rl_L)
     {
       //Compare gate voltages to distinguish JFET from MOSFET
       //Set probes: probe-2 = HiZ / probe-1 -- Vcc
-      ADC_PORT = Probes.ADC_1;                   //Pull up source directly
-      ADC_DDR = Probes.ADC_1;                    //Enable pull up for source
+      SET_ADC_PORT(Probes.ADC_1);                   //Pull up source directly
+      SET_ADC_DDR(Probes.ADC_1);                    //Enable pull up for source
       //Gate is still pulled down via Rh
       U_2 = ReadU_20ms(Probes.Pin_3);            //Get voltage at gate
       if (U_2 < 977)                             //MOSFET
@@ -2265,7 +2263,7 @@ byte CheckThyristorTriac(void)
     //We assume: probe-1 = MT2 / probe-2 = MT1 / probe-3 = G
     R_DDR = 0;                                   //Disable all probe resistors
     R_PORT = 0;
-    ADC_PORT = Probes.ADC_2;                     //Pull up MT1 directly
+    SET_ADC_PORT(Probes.ADC_2);                     //Pull up MT1 directly
     delay(5);
     R_DDR = Probes.Rl_1;                         //Pull down MT2 via Rl
     //Probe-3/gate is in HiZ mode, triac shouldn't conduct without a triggered gate
@@ -2329,7 +2327,7 @@ unsigned int SmallResistor(byte ZeroFlag)
   */
   //Pulse on: GND -- probe 2 / probe 1 -- Rl -- 5V, pulse off: GND -- probe 2 / probe 1 -- Rl -- GND
   SetADCLow();                                   //Set ADC port to low 
-  ADC_DDR = Probes.ADC_2;                        //Pull-down probe 2 directly 
+  SET_ADC_DDR(Probes.ADC_2);                        //Pull-down probe 2 directly 
   R_PORT = 0;                                    //Low by default 
   R_DDR = Probes.Rl_1;                           //Enable resistor
   #define MODE_HIGH           0b00000001
@@ -2354,7 +2352,7 @@ unsigned int SmallResistor(byte ZeroFlag)
     while (Counter < 100)
     {
       //Create short pulse
-      ADC_DDR = Probes.ADC_2;                    //Pull-down probe-2 directly
+      SET_ADC_DDR(Probes.ADC_2);                    //Pull-down probe-2 directly
       R_PORT = Probes.Rl_1;
       //Start ADC conversion, ADC performs S&H after 1.5 ADC cycles (12Âµs)
       ADCSRA |= (1 << ADSC);                     //Start conversion
@@ -2362,7 +2360,7 @@ unsigned int SmallResistor(byte ZeroFlag)
       waitus(20);
       //Stop pulse
       R_PORT = 0;
-      ADC_DDR = Probes.ADC_2 | Probes.ADC_1;
+      SET_ADC_DDR(Probes.ADC_2 | Probes.ADC_1);
       //Get ADC reading (about 100Âµs)
       while (ADCSRA & (1 << ADSC));              //Wait until conversion is done 
       Value += ADCW;                             //Add ADC reading 
@@ -2448,7 +2446,7 @@ void CheckResistor(void)
   */
   //We assume: resistor between probe-1 and probe-2, set probes: Gnd -- probe-2 / probe-1 -- Rl -- Vcc
   SetADCLow();                                   //Set ADC port low low 
-  ADC_DDR = Probes.ADC_2;                        //Pull down probe-2 directly 
+  SET_ADC_DDR(Probes.ADC_2);                        //Pull down probe-2 directly 
   R_DDR = Probes.Rl_1;                           //Enable Rl for probe-1 
   R_PORT = Probes.Rl_1;                          //Pull up probe-1 via Rl 
   U_Ri_L = ReadU_5ms(Probes.Pin_2);              //Get voltage at internal R of ÂµC 
@@ -2470,8 +2468,8 @@ void CheckResistor(void)
     R_PORT = Probes.Rh_1;                        //Pull up probe-1 via Rh 
     U_Rh_H = ReadU_5ms(Probes.Pin_1);            //Get voltage at Rh pulled up 
     //Set probes: Gnd -- Rl -- probe-2 / probe-1 -- Vcc
-    ADC_DDR = Probes.ADC_1;                      //Set probe-1 to output 
-    ADC_PORT = Probes.ADC_1;                     //Pull up probe-1 directly 
+    SET_ADC_DDR(Probes.ADC_1);                      //Set probe-1 to output 
+    SET_ADC_PORT(Probes.ADC_1);                     //Pull up probe-1 directly 
     R_PORT = 0;                                  //Set resistor port to low 
     R_DDR = Probes.Rl_2;                         //Pull down probe-2 via Rl 
     U_Ri_H = ReadU_5ms(Probes.Pin_1);            //Get voltage at internal R of ÂµC 
@@ -2796,7 +2794,7 @@ byte LargeCap(Capacitor_Type *Cap)
     if (Check.Found == COMP_ERROR) return 0;       //Skip on error
     //Setup probes: Gnd -- probe 1 / probe 2 -- Rl -- Vcc 
     SetADCLow();                                   //Set ADC port to low 
-    ADC_DDR = Probes.ADC_2;                        //Pull-down probe 2 directly 
+    SET_ADC_DDR(Probes.ADC_2);                        //Pull-down probe 2 directly 
     R_PORT = 0;                                    //Set resistor port to low 
     R_DDR = 0;                                     //Set resistor port to HiZ 
     U_Zero = ReadU(Probes.Pin_1);                  //Get zero voltage (noise) 
@@ -2920,7 +2918,7 @@ byte SmallCap(Capacitor_Type *Cap)
   //Set probes: Gnd -- all probes / Gnd -- Rh -- probe-1
   R_PORT = 0;                                    //Set resistor port to low
   //Set ADC probe pins to output mode
-  ADC_DDR = (1 << TP1) | (1 << TP2) | (1 << TP3);
+  SET_ADC_DDR((1 << TP1) | (1 << TP2) | (1 << TP3));
   SetADCLow();                                   //Set ADC port to low 
   R_DDR = Probes.Rh_1;                           //Pull-down probe-1 via Rh 
   //Setup analog comparator
@@ -2949,7 +2947,7 @@ byte SmallCap(Capacitor_Type *Cap)
   }
   //Start timer by setting clock prescaler (1/1 clock divider)
   TCCR1B = (1 << CS10);
-  ADC_DDR = TempByte;                            //Start charging DUT
+  SET_ADC_DDR(TempByte);                            //Start charging DUT
   //Timer loop - run until voltage is reached - detect timer overflows
   while (1)
    {
@@ -3194,13 +3192,13 @@ byte MeasureInductance(uint32_t *Time, byte Mode)
   if (Mode & MODE_LOW_CURRENT)                   //Low current 
   {
     R_DDR = Probes.Rl_2;                         //Pull down probe-2 via Rl 
-    ADC_DDR = Probes.ADC_1;                      //Pull down probe-1 directly 
+    SET_ADC_DDR(Probes.ADC_1);                      //Pull down probe-1 directly 
   }
   else                                           //High current 
   {
     R_DDR = 0;                                   //Disable probe resistors 
     //Pull down probe-1 and probe-2 directly
-    ADC_DDR = Probes.ADC_1 | Probes.ADC_2;
+    SET_ADC_DDR(Probes.ADC_1 | Probes.ADC_2);
   }
   //Setup analog comparator
   ADCSRB = (1 << ACME);                          //Use ADC multiplexer as negative input 
@@ -3220,7 +3218,7 @@ byte MeasureInductance(uint32_t *Time, byte Mode)
   {
     Test = (CPU_FREQ / 1000000);                 //Cycles per Âµs
     //Change probes: Gnd -- Rl -- probe-2 / probe-1 -- Vcc
-    ADC_PORT = Probes.ADC_1;                     //Pull up probe-1 directly
+    SET_ADC_PORT(Probes.ADC_1);                     //Pull up probe-1 directly
     /*
        Delay timer by about 3-4Âµs to skip capacitive effects of large inductors
         - a single loop needs 4 cycles, the last loop run just 3
@@ -3237,7 +3235,7 @@ byte MeasureInductance(uint32_t *Time, byte Mode)
   {
     TCCR1B |= (1 << CS10);                       //Start timer (1/1 clock divider)
     //Change probes: Gnd -- Rl -- probe-2 / probe-1 -- Vcc
-    ADC_PORT = Probes.ADC_1;                     //Pull up probe-1 directly
+    SET_ADC_PORT(Probes.ADC_1);                     //Pull up probe-1 directly
   }
   //Timer loop - run until voltage threshold is reached - detect timer overflows
    while (1)
@@ -4383,19 +4381,19 @@ byte SelfAdjust(void)
           lcd_fixed_string(RiLow_str);           //Display: Ri-
           //TP1:  Gnd -- Ri -- probe -- Rl -- Ri -- Vcc
           SetADCLow();
-          ADC_DDR = 1 << TP1;
+          SET_ADC_DDR(1 << TP1);
           R_PORT = RL_MASK(TP1);
           R_DDR = RL_MASK(TP1);
           Val1 = ReadU_5ms(TP1);
           U_RiL += Val1;
           //TP2: Gnd -- Ri -- probe -- Rl -- Ri -- Vcc 
-          ADC_DDR = 1 << TP2;
+          SET_ADC_DDR(1 << TP2);
           R_PORT = RL_MASK(TP2);
           R_DDR = RL_MASK(TP2);
           Val2 = ReadU_5ms(TP2);
           U_RiL += Val2;
           //TP3: Gnd -- Ri -- probe -- Rl -- Ri -- Vcc 
-          ADC_DDR = 1 << TP3;
+          SET_ADC_DDR(1 << TP3);
           R_PORT = RL_MASK(TP3);
           R_DDR = RL_MASK(TP3);
           Val3 = ReadU_5ms(TP3);
@@ -4406,20 +4404,20 @@ byte SelfAdjust(void)
           lcd_fixed_string(RiHigh_str);          //Display: Ri+ 
           //TP1: Gnd -- Ri -- Rl -- probe -- Ri -- Vcc
           R_PORT = 0;
-          ADC_PORT = 1 << TP1;
-          ADC_DDR = 1 << TP1;
+          SET_ADC_PORT(1 << TP1);
+          SET_ADC_DDR(1 << TP1);
           R_DDR = RL_MASK(TP1);
           Val1 = UREF_VCC - ReadU_5ms(TP1);
           U_RiH += Val1;
           //TP2: Gnd -- Ri -- Rl -- probe -- Ri -- Vcc
-          ADC_PORT = 1 << TP2;
-          ADC_DDR = 1 << TP2;
+          SET_ADC_PORT(1 << TP2);
+          SET_ADC_DDR(1 << TP2);
           R_DDR = RL_MASK(TP2);
           Val2 = UREF_VCC - ReadU_5ms(TP2);
           U_RiH += Val2;
           //TP3: Gnd -- Ri -- Rl -- probe -- Ri -- Vcc
-          ADC_PORT = 1 << TP3;
-          ADC_DDR = 1 << TP3;
+          SET_ADC_PORT(1 << TP3);
+          SET_ADC_DDR(1 << TP3);
           R_DDR = RL_MASK(TP3);
           Val3 = UREF_VCC - ReadU_5ms(TP3);
           U_RiH += Val3;
