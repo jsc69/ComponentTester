@@ -424,8 +424,10 @@ void handleButtons() {
   // und funktioniert nur wenn der ArduTester gerade in seiner Wait-Loop ist.
   // sendCommand() ist der korrekte, zuverlässige Weg.
   if (changed & (1 << INPUT_A)) {
-    ESP_LOGI(TAG_BTN, "A → CMD_START_TEST");
-    sendCommand(CMD_START_TEST, 0x01);
+    if (g_state == STATE_IDLE || g_state == STATE_RESULT || g_state == STATE_WELCOME) {
+      ESP_LOGI(TAG_BTN, "A → CMD_START_TEST");
+      sendCommand(CMD_START_TEST, 0x01);
+    }
   }
 
   // Stubs für später:

@@ -595,12 +595,12 @@ bool waitForEspAck() {
 // Gibt true zurück wenn ESP32 ACK gegeben hat, false bei Timeout.
 // Port-Zustände werden gesichert damit Messwiderstände unbeeinflusst bleiben.
 bool sendToEsp(uint8_t id, uint8_t data) {
+  // PC4 (WR) als Ausgang sicherstellen
+  BB_HANDSHAKE_DDR |= (1 << BB_WR_BIT);
+
   if (!waitForBusIdle()) {
     return false;
   }
-
-  uint8_t oldDDRB  = DDRB,  oldDDRE  = DDRE;
-  uint8_t oldPORTB = PORTB, oldPORTE = PORTE;
 
   // Bus als Ausgang, ID + Data anlegen
   BUS_ID_DDR   |= 0x0F;
@@ -612,11 +612,10 @@ bool sendToEsp(uint8_t id, uint8_t data) {
   BB_HANDSHAKE_PORT &= ~(1 << BB_WR_BIT);
 
   if (!waitForEspReady()) {
-    // Timeout: Bus sauber freigeben - WR auf HIGH
     Serial.println(F("[SEND] keine Ready erhalten"));
     BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
-    DDRB = oldDDRB;   DDRE = oldDDRE;
-    PORTB = oldPORTB; PORTE = oldPORTE;
+    DDRB = 0x00;   DDRE = 0x00;
+    PORTB = 0xFF;  PORTE = 0xFF;
     return false;
   }
 
@@ -625,15 +624,14 @@ bool sendToEsp(uint8_t id, uint8_t data) {
 
   if (!waitForEspAck()) {
     Serial.println(F("[SEND] keine Lesebestätigung erhalten"));
-    // Bus freigeben
-    DDRB = oldDDRB;   DDRE = oldDDRE;
-    PORTB = oldPORTB; PORTE = oldPORTE;
+    DDRB = 0x00;   DDRE = 0x00;
+    PORTB = 0xFF;  PORTE = 0xFF;
     return false;
   }
 
   // Bus freigeben
-  DDRB = oldDDRB;   DDRE = oldDDRE;
-  PORTB = oldPORTB; PORTE = oldPORTE;
+  DDRB = 0x00;   DDRE = 0x00;
+  PORTB = 0xFF;  PORTE = 0xFF;
 
   return true;
 }
@@ -710,8 +708,9 @@ void reportComponent() {
 // Wird in loop() aufgerufen wenn RD (PC5) = HIGH erkannt wurde.
 // Gibt true zurück wenn ein gültiges Kommando (cmd != 0x00) gelesen wurde.
 bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
-  uint8_t oldDDRB  = DDRB,  oldDDRE  = DDRE;
-  uint8_t oldPORTB = PORTB, oldPORTE = PORTE;
+  // Bus als Eingang mit Pull-ups
+  DDRB = 0x00;   DDRE = 0x00;
+  PORTB = 0xFF;  PORTE = 0xFF;
   BUS_ID_DDR  &= ~0x0F;
   SetADCHiz();   // PC0-PC2 als Eingang — lässt PC4 (WR) unberührt
 
@@ -719,28 +718,19 @@ bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
   BB_HANDSHAKE_PORT &= ~(1 << BB_WR_BIT);
 
   // Schritt 2: Warten auf RD=HIGH ("Daten gültig")
-  uint16_t t = 0;
   if(!waitForEspAck()) {
     Serial.println(F("[READ] TIMEOUT — kein RD=HIGH vom ESP32"));
     BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
-    DDRB = oldDDRB; DDRE = oldDDRE;
-    PORTB = oldPORTB; PORTE = oldPORTE;
     return false;
   }
 
   // Schritt 3: Daten lesen
   cmd   = PINE & 0x0F;
   param = PINB;
-Serial.print(F("[READ] PINE=0x")); Serial.print(PINE, HEX);
-Serial.print(F(" PINB=0x")); Serial.print(PINB, HEX);
-Serial.print(F(" DDRE=0x")); Serial.println(DDRE, HEX);
 
   // Schritt 4: WR=HIGH — "Kommando gelesen, fertig"
   BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
   waitForEspAck(); // close communication
-
-  DDRB = oldDDRB; DDRE = oldDDRE;
-  PORTB = oldPORTB; PORTE = oldPORTE;
 
   Serial.print(F("[CMD] cmd=0x")); Serial.print(cmd, HEX);
   Serial.print(F(" param=0x"));   Serial.println(param, HEX);
@@ -994,7 +984,7 @@ void loop()
   /*
   // ── DIAGNOSE: alle 500ms Pin-Zustand loggen ──────────────────
   static uint32_t diag_last = 0;
-  if (millis() - diag_last > 5000) {
+  if (millis() - diag_last > 500) {
     diag_last = millis();
     Serial.print(F("[DIAG] PINC=0x")); Serial.print(PINC, HEX);
     Serial.print(F(" DDRC=0x")); Serial.print(DDRC, HEX);
@@ -1004,7 +994,7 @@ void loop()
     Serial.print(F(" PINB=0x")); Serial.print(PINB, HEX);
     Serial.print(F(" PINE=0x")); Serial.println(PINE, HEX);
   }
-  */
+  //*/
 
   uint8_t cmd = 0;
   uint8_t param = 0;
