@@ -750,9 +750,9 @@ void symTriac(int16_t cx, int16_t cy,
 
 // Testpunkt-Nummer (1..3) für Pinrolle (1=E/S/A, 2=B/G, 3=C/D/K)
 uint8_t tpForRole(uint8_t pins_byte, uint8_t role) {
-  for (uint8_t i = 0; i < 3; i++)
-    if (((pins_byte >> (i*2)) & 0x03) == role) return i + 1;
-  return 1;
+  // ArduTester-Encoding: Slot (role-1) enthält TP-Nummer
+  // Bits 0:1 = TP von Rolle 1, Bits 2:3 = TP von Rolle 2, Bits 4:5 = TP von Rolle 3
+  return (pins_byte >> ((role - 1) * 2)) & 0x03;
 }
 
 const char* pinLabel(uint8_t type, uint8_t role) {
@@ -985,15 +985,18 @@ void displayResult() {
       if (g_bus.val1) { drawRow(ry,"L:",   formatValue(g_bus.val1,g_bus.val1_unit,"H"),  col); ry+=18; }
       if (g_bus.val2) { drawRow(ry,"R:",   formatValue(g_bus.val2,g_bus.val2_unit,"Ohm"),col); ry+=18; }
       break;
-    case TYPE_DIODE: case TYPE_DIODE2:
-      if (g_bus.val1) { drawRow(ry,"Vf:",  formatValue(g_bus.val1,g_bus.val1_unit,"V"),  col); ry+=18; }
-      if (t==TYPE_DIODE2&&g_bus.val2)
-                       { drawRow(ry,"Vf2:", formatValue(g_bus.val2,g_bus.val2_unit,"V"),  col); ry+=18; }
-      if (g_bus.val3) { drawRow(ry,"C:",   formatValue(g_bus.val3,g_bus.val3_unit,"F"),  col); ry+=18; }
+    case TYPE_DIODE:
+      if (g_bus.val1) { drawRow(ry,"Vf:", formatValue(g_bus.val1,g_bus.val1_unit,"V"), col); ry+=18; }
+      if (g_bus.val2) { drawRow(ry,"C:",  formatValue(g_bus.val2,g_bus.val2_unit,"F"), col); ry+=18; }
+      if (g_bus.val3) { drawRow(ry,"Ir:", formatValue(g_bus.val3,g_bus.val3_unit,"A"), col); ry+=18; }
+      break;
+    case TYPE_DIODE2:
+      if (g_bus.val1) { drawRow(ry,"Vf1:",formatValue(g_bus.val1,g_bus.val1_unit,"V"), col); ry+=18; }
+      if (g_bus.val2) { drawRow(ry,"Vf2:",formatValue(g_bus.val2,g_bus.val2_unit,"V"), col); ry+=18; }
+      if (g_bus.val3) { drawRow(ry,"C:",  formatValue(g_bus.val3,g_bus.val3_unit,"F"), col); ry+=18; }
       break;
     case TYPE_THYRISTOR: case TYPE_TRIAC:
-      if (g_bus.val1) { drawRow(ry,"Vgt:", formatValue(g_bus.val1,g_bus.val1_unit,"V"),  col); ry+=18; }
-      if (g_bus.val2) { drawRow(ry,"Igt:", formatValue(g_bus.val2,g_bus.val2_unit,"A"),  col); ry+=18; }
+      // ArduTester misst keine Spannungs-/Stromwerte für Thyristor/Triac
       break;
     default: break;
   }

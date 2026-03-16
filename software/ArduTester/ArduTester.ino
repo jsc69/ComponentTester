@@ -593,9 +593,8 @@ bool waitForEspAck() {
 
 // Einen Frame senden mit Handshake.
 // Gibt true zurück wenn ESP32 ACK gegeben hat, false bei Timeout.
-// Port-Zustände werden gesichert damit Messwiderstände unbeeinflusst bleiben.
+// PC4 (WR) als Ausgang sicherstellen — wird durch ADC_DDR-Zuweisungen gelöscht
 bool sendToEsp(uint8_t id, uint8_t data) {
-  // PC4 (WR) als Ausgang sicherstellen
   BB_HANDSHAKE_DDR |= (1 << BB_WR_BIT);
 
   if (!waitForBusIdle()) {
@@ -727,6 +726,9 @@ bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
   // Schritt 3: Daten lesen
   cmd   = PINE & 0x0F;
   param = PINB;
+Serial.print(F("[READ] PINE=0x")); Serial.print(PINE, HEX);
+Serial.print(F(" PINB=0x")); Serial.print(PINB, HEX);
+Serial.print(F(" DDRE=0x")); Serial.println(DDRE, HEX);
 
   // Schritt 4: WR=HIGH — "Kommando gelesen, fertig"
   BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
@@ -3742,7 +3744,7 @@ void ShowDiode(void)
   //Uf
   lcd_line(2);                                   //Go to line #2 
   lcd_fixed_string(Vf_str);                      //Display: Vf= 
-  ShowDiode_Uf(D1);                              //First diode 
+  ShowDiode_Uf(D1);                              //First diode — sendet VAL1 (Vf)
   lcd_space();
   if (D2 == NULL)                                //Single diode 
   {
@@ -3750,33 +3752,43 @@ void ShowDiode(void)
     if (D1->V_f2 < 250)
     {
       lcd_data('(');
+      uint8_t savedCounter = ValueCounter;       //V_f2 nicht als VAL senden
       DisplayValue(D1->V_f2, 0, 0);
+      ValueCounter = savedCounter;
       lcd_data(')');
     }
-    //Reverse leakage current
+    //Capacitance — VAL2
+    if (SkipFlag == 0)
+    {
+        delay(3000);
+      lcd_clear_line(2);
+      lcd_fixed_string(DiodeCap_str);            //Display: C=
+      ShowDiode_C(D1);                           //sendet VAL2 (C)
+    }
+    //Reverse leakage current — VAL3
     UpdateProbes(D1->C, D1->A, 0);               //Reverse diode 
-    I_leak = GetLeakageCurrent();                //Get current (in ÂµA) 
+    I_leak = GetLeakageCurrent();                //Get current (in µA) 
     if (I_leak > 0)                              //Show if not zero 
     {
         delay(3000);
       lcd_clear_line(2);                         //Only change line #2 
       lcd_fixed_string(I_R_str);                 //Display: I_R= 
-      DisplayValue(I_leak, -6, 'A');             //Display current 
+      DisplayValue(I_leak, -6, 'A');             //sendet VAL3 (Ir)
     }
   }
   else
   {
-    ShowDiode_Uf(D2);                            //Second diode (optional)
-  }
-  //Capacitance
-  if (SkipFlag == 0)
-  {
-      delay(3000);
-    lcd_clear_line(2);                           //Only change line #2
-    lcd_fixed_string(DiodeCap_str);              //Display: C= 
-    ShowDiode_C(D1);                             //First diode 
-    lcd_space();
-    ShowDiode_C(D2);                             //Second diode (optional)
+    ShowDiode_Uf(D2);                            //Second diode — sendet VAL2 (Vf2)
+    //Capacitance — VAL3
+    if (SkipFlag == 0)
+    {
+        delay(3000);
+      lcd_clear_line(2);
+      lcd_fixed_string(DiodeCap_str);            //Display: C=
+      ShowDiode_C(D1);                           //sendet VAL3 (C)
+      lcd_space();
+      ShowDiode_C(D2);                           //sendet VAL4 (C2) falls nötig
+    }
   }
 }
 
