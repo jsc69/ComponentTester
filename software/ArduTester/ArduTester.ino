@@ -524,40 +524,77 @@ void ShowDiode_C(Diode_Type *Diode);
 // ================================================================
 
 // Handshake-Pin-Defines
-#define BB_WR_DDR   DDRC
-#define BB_WR_PORT  PORTC
+#define BB_HANDSHAKE_PIN   PINC
+#define BB_HANDSHAKE_DDR   DDRC
+#define BB_HANDSHAKE_PORT  PORTC
 #define BB_WR_BIT   PC4    // ATmega → ESP32: Frame-Strobe / Bereit-ACK
-#define BB_RD_PIN   PINC
-#define BB_RD_DDR   DDRC
 #define BB_RD_BIT   PC5    // ESP32  → ATmega: Frame-ACK / Kommando-Trigger
+
 #define BB_BTN_PIN  PINC
 #define BB_BTN_DDR  DDRC
 #define BB_BTN_BIT  PC3    // Taster: GND = gedrückt (low-active)
 
 // Handshake-Timeout in Microsekunden (ESP32 I2C max ~1ms pro Zugriff)
-#define BB_ACK_TIMEOUT_US  500000
+#define BB_ACK_TIMEOUT_US  50000
 
 // Handshake initialisieren (in setup() aufrufen)
 void bbHandshakeInit() {
-  BB_WR_PORT |=  (1 << BB_WR_BIT);   // PC4 HIGH (idle) — vor DDR!
-  BB_WR_DDR  |=  (1 << BB_WR_BIT);   // PC4 = Ausgang
-  BB_RD_DDR  &= ~(1 << BB_RD_BIT);   // PC5 = Eingang
-  PORTC      |=  (1 << BB_RD_BIT);   // PC5 Pull-up (RD idle = HIGH)
+  BB_HANDSHAKE_PORT |=  (1 << BB_WR_BIT);   // PC4 HIGH (idle) — vor DDR!
+  BB_HANDSHAKE_PORT |=  (1 << BB_RD_BIT);   // PC5 Pull-up (RD idle = HIGH)
+  BB_HANDSHAKE_DDR  |=  (1 << BB_WR_BIT);   // PC4 = Ausgang
+  BB_HANDSHAKE_DDR  &= ~(1 << BB_RD_BIT);   // PC5 = Eingang
   BB_BTN_DDR &= ~(1 << BB_BTN_BIT);  // PC3 = Eingang
   PORTC      |=  (1 << BB_BTN_BIT);  // PC3 Pull-up
+}
+
+// Warte auf Ende der Kommunikation (BUS_IDLE)
+bool waitForBusIdle() {
+  uint16_t t = 0;
+  while (BB_HANDSHAKE_PIN & (1 << BB_RD_BIT) && BB_HANDSHAKE_PIN & (1 << BB_WR_BIT)) {
+    delayMicroseconds(100);
+    if (++t > (BB_ACK_TIMEOUT_US)) {
+      Serial.println(F("[SEND] TIMEOUT — kein BUS_IDLE"));
+      return false;
+    }
+  }
+  return true;
+}    
+
+// Warten bis ESP32 RD auf HIGH setzt -> ESP32 ist ready
+bool waitForEspReady() {
+  uint16_t t = 0;
+  while (BB_HANDSHAKE_PIN & (1 << BB_RD_BIT)) {
+    delayMicroseconds(100);
+    if (++t > (BB_ACK_TIMEOUT_US)) {
+      Serial.println(F("[SEND] TIMEOUT — kein READY vom ESP"));
+      return false;
+    }
+  }
+  return true;
+}
+
+// Warten bis ESP32 RD auf LOW zieht -> ESP32 bestätigt
+bool waitForEspAck() {
+  uint16_t t = 0;
+  while (!(BB_HANDSHAKE_PIN & (1 << BB_RD_BIT))) {
+    delayMicroseconds(100);
+    if (++t > (BB_ACK_TIMEOUT_US)) {
+      Serial.println(F("[SEND] TIMEOUT — kein ACK von ESP"));
+      return false;
+    }
+  }
+  return true;
 }
 
 // Einen Frame senden mit Handshake.
 // Gibt true zurück wenn ESP32 ACK gegeben hat, false bei Timeout.
 // Port-Zustände werden gesichert damit Messwiderstände unbeeinflusst bleiben.
 bool sendToEsp(uint8_t id, uint8_t data) {
-  // Handshake-Pins sicherstellen
-  Serial.print(F("[BUS] ID=0x"));
-  if (id   < 0x10) Serial.print(F("0"));
-  Serial.print(id, HEX);
-  Serial.print(F(" DATA=0x"));
-  if (data < 0x10) Serial.print(F("0"));
-  Serial.println(data, HEX);
+  BB_HANDSHAKE_DDR |= (1 << BB_WR_BIT);
+
+  if (!waitForBusIdle()) {
+    return false;
+  }
 
   uint8_t oldDDRB  = DDRB,  oldDDRE  = DDRE;
   uint8_t oldPORTB = PORTB, oldPORTE = PORTE;
@@ -568,48 +605,43 @@ bool sendToEsp(uint8_t id, uint8_t data) {
   BUS_ID_PORT   = (BUS_ID_PORT & 0xF0) | (id & 0x0F);
   BUS_DATA_PORT = data;
 
-  // WR = LOW: "Frame liegt an"
-  BB_WR_PORT &= ~(1 << BB_WR_BIT);
+Serial.print(F("[SEND] id=0x")); Serial.print(id, HEX);
+Serial.print(F(" DDRC=")); Serial.print(DDRC, HEX);
+Serial.print(F(" PORTC=")); Serial.print(PORTC, HEX);
+Serial.print(F(" PINC=")); Serial.print(PINC, HEX);
 
-  // Warten auf RD = LOW (ACK vom ESP32), mit Timeout
-  uint16_t t = 0;
-  while (BB_RD_PIN & (1 << BB_RD_BIT)) {
-    delayMicroseconds(10);
-    if (++t > (BB_ACK_TIMEOUT_US)) {
-      // Timeout: Bus sauber freigeben - WR auf HIGH
-      BB_WR_PORT |= (1 << BB_WR_BIT);
-      DDRB = oldDDRB;   DDRE = oldDDRE;
-      PORTB = oldPORTB; PORTE = oldPORTE;
-      Serial.println(F("[SendToEsp-1] TIMEOUT — kein ACK"));
-      return false;
-    }
+  // WR = LOW: "Frame liegt an"
+  BB_HANDSHAKE_PORT &= ~(1 << BB_WR_BIT);
+
+Serial.print(F(" → DDRC=")); Serial.print(DDRC, HEX);
+Serial.print(F(" PORTC=")); Serial.print(PORTC, HEX);
+Serial.print(F(" PINC=")); Serial.println(PINC, HEX);
+
+  if (!waitForEspReady()) {
+    // Timeout: Bus sauber freigeben - WR auf HIGH
+    Serial.println(F("[SEND] keine Ready erhalten"));
+    BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
+    DDRB = oldDDRB;   DDRE = oldDDRE;
+    PORTB = oldPORTB; PORTE = oldPORTE;
+    return false;
   }
 
   // WR = HIGH: "Übertragung abgeschlossen"
-  BB_WR_PORT |= (1 << BB_WR_BIT);
+  BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
 
-  // Warten bis ESP32 RD = LOW zieht (Handshake-Ende, Timeout ignorieren)
-  t = 0;
-  while (!(BB_RD_PIN & (1 << BB_RD_BIT))) {
-    delayMicroseconds(10);
-    if (++t > (BB_ACK_TIMEOUT_US)) {
-      Serial.println(F("[SendToEsp-2] TIMEOUT — kein ACK"));
-      break;
-    }
+  if (!waitForEspAck()) {
+    Serial.println(F("[SEND] keine Lesebestätigung erhalten"));
+    // Bus freigeben
+    DDRB = oldDDRB;   DDRE = oldDDRE;
+    PORTB = oldPORTB; PORTE = oldPORTE;
+    return false;
   }
 
-  // ⑥ Bus freigeben
+  // Bus freigeben
   DDRB = oldDDRB;   DDRE = oldDDRE;
   PORTB = oldPORTB; PORTE = oldPORTE;
 
   return true;
-}
-
-// Primär Handshake, Fallback auf NoAck (2×) wenn kein ACK
-void sendToEspReliable(uint8_t id, uint8_t data) {
-  if (!sendToEsp(id, data)) {
-    // ERROR! FIMME: handle this
-  }
 }
 
 // TYPE + PINS senden (nach jeder Messung aufrufen)
@@ -676,8 +708,8 @@ void reportComponent() {
       break;
   }
 
-  sendToEspReliable(0x00, type);
-  sendToEspReliable(0x01, pins);
+  sendToEsp(0x00, type);
+  sendToEsp(0x01, pins);
 }
 
 // Kommando vom ESP32 empfangen.
@@ -690,19 +722,16 @@ bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
   BUS_DATA_DDR = 0x00;
 
   // Schritt 1: WR=LOW — "ATmega bereit zum Lesen"
-  BB_WR_PORT &= ~(1 << BB_WR_BIT);
+  BB_HANDSHAKE_PORT &= ~(1 << BB_WR_BIT);
 
-  // Schritt 2: Warten auf RD=HIGH ("Daten liegen an")
+  // Schritt 2: Warten auf RD=HIGH ("ESP empfangsbereit")
   uint16_t t = 0;
-  while (!(BB_RD_PIN & (1 << BB_RD_BIT))) {
-    delayMicroseconds(10);
-    if (++t > BB_ACK_TIMEOUT_US / 10) {
-      Serial.println(F("[CMD] TIMEOUT — kein RD=HIGH vom ESP32"));
-      BB_WR_PORT |= (1 << BB_WR_BIT);
-      DDRB = oldDDRB; DDRE = oldDDRE;
-      PORTB = oldPORTB; PORTE = oldPORTE;
-      return false;
-    }
+  if(!waitForEspReady()) {
+    Serial.println(F("[READ] TIMEOUT — kein RD=HIGH vom ESP32"));
+    BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
+    DDRB = oldDDRB; DDRE = oldDDRE;
+    PORTB = oldPORTB; PORTE = oldPORTE;
+    return false;
   }
 
   // Schritt 3: Daten lesen
@@ -710,7 +739,7 @@ bool checkBrutzelBoyCommand(uint8_t &cmd, uint8_t &param) {
   param = PINB;
 
   // Schritt 4: WR=HIGH — "Kommando gelesen, fertig"
-  BB_WR_PORT |= (1 << BB_WR_BIT);
+  BB_HANDSHAKE_PORT |= (1 << BB_WR_BIT);
 
   DDRB = oldDDRB; DDRE = oldDDRE;
   PORTB = oldPORTB; PORTE = oldPORTE;
@@ -779,8 +808,8 @@ void startTest() {
 
   // ── BUSY senden — sofort, bevor irgendwas gemessen wird ──────
   // BrutzelBoy wechselt damit in den Mess-Screen.
-  sendToEspReliable(0x0E, 0x01);               // STATUS: BUSY
-  sendToEspReliable(0x0A, 0x04);               // MSG: Probing...
+  sendToEsp(0x0E, 0x01);               // STATUS: BUSY
+  sendToEsp(0x0A, 0x04);               // MSG: Probing...
 
   // ── Hardware-Reset ────────────────────────────────────────────
   SetADCHiz();
@@ -798,7 +827,7 @@ void startTest() {
     lcd_fixed_string(Remove_str);
     lcd_line(2);
     lcd_fixed_string(ShortCircuit_str);
-    sendToEspReliable(0x0A, 0x02);         // MSG: Short Circuit!
+    sendToEsp(0x0A, 0x02);         // MSG: Short Circuit!
   }
   else
   {
@@ -813,7 +842,7 @@ void startTest() {
       lcd_data(':');
       lcd_space();
       DisplayValue(Check.U, -3, 'V');
-      sendToEspReliable(0x0A, 0x01);       // MSG: No part found
+      sendToEsp(0x0A, 0x01);       // MSG: No part found
     }
     else
     {
@@ -868,7 +897,7 @@ void startTest() {
       // ── DONE senden — einmalig, kein Spam ─────────────────
       // BrutzelBoy wechselt zum Ergebnis-Screen und bleibt dort.
       // Danach läuft loop() neu und wartet stumm auf den nächsten Start.
-      sendToEspReliable(0x0E, 0x02);         // STATUS: DONE
+      sendToEsp(0x0E, 0x02);         // STATUS: DONE
 
       RunsMissed = 0;
       RunsPassed++;
@@ -881,7 +910,7 @@ void startTest() {
 void startFrequencyCounter(uint8_t param) {
   // STUB: Frequenzmessung noch nicht implementiert
   Serial.println(F("[CMD] FREQ_METER: nicht implementiert"));
-  //sendToEspReliable(0x0A, 0x01);            // MSG: No part (Platzhalter)
+  //sendToEsp(0x0A, 0x01);            // MSG: No part (Platzhalter)
 }
 
 void signalGenerator(uint8_t param) {
@@ -935,30 +964,30 @@ void pwmGenerator(int8_t param) {
 
 void startCalibration(uint8_t param) {
   Serial.println(F("[CMD] CALIBRATE"));
-  sendToEspReliable(0x0E, 0x03);               // STAT_CAL
+  sendToEsp(0x0E, 0x03);               // STAT_CAL
   byte calResult = SelfAdjust();
   if (calResult) SaveEEP();
   // Kalibrierwerte senden: VAL1=RiL, VAL2=RiH, VAL3=RZero, VAL4=CapZero+Offsets
-  sendToEspReliable(0x0B, 0x00);               // UNIT: keine Einheit
-  sendToEspReliable(0x02, lowByte(Config.RiL));
-  sendToEspReliable(0x03, highByte(Config.RiL));
-  sendToEspReliable(0x0B, 0x00);
-  sendToEspReliable(0x04, lowByte(Config.RiH));
-  sendToEspReliable(0x05, highByte(Config.RiH));
-  sendToEspReliable(0x0B, 0x00);
-  sendToEspReliable(0x06, lowByte(Config.RZero));
-  sendToEspReliable(0x07, highByte(Config.RZero));
+  sendToEsp(0x0B, 0x00);               // UNIT: keine Einheit
+  sendToEsp(0x02, lowByte(Config.RiL));
+  sendToEsp(0x03, highByte(Config.RiL));
+  sendToEsp(0x0B, 0x00);
+  sendToEsp(0x04, lowByte(Config.RiH));
+  sendToEsp(0x05, highByte(Config.RiH));
+  sendToEsp(0x0B, 0x00);
+  sendToEsp(0x06, lowByte(Config.RZero));
+  sendToEsp(0x07, highByte(Config.RZero));
   // VAL4: LO=CapZero, HI=RefOffset+128 (signed→unsigned), extra: CompOffset+128 in TEXT_MSG
-  sendToEspReliable(0x0B, 0x00);
-  sendToEspReliable(0x08, Config.CapZero);
-  sendToEspReliable(0x09, (uint8_t)(Config.RefOffset + 128));
+  sendToEsp(0x0B, 0x00);
+  sendToEsp(0x08, Config.CapZero);
+  sendToEsp(0x09, (uint8_t)(Config.RefOffset + 128));
   // CompOffset als extra DATA in TEXT_MSG (0x0A), Wert +128
-  sendToEspReliable(0x0A, (uint8_t)(Config.CompOffset + 128));
+  sendToEsp(0x0A, (uint8_t)(Config.CompOffset + 128));
   // Ergebnis: MSG_CAL_DONE (0x08) = OK, STAT_CAL_ERR (0xFF) = Fehler
   if (calResult)
-    sendToEspReliable(0x0A, 0x08);   // MSG_CAL_DONE via TEXT_MSG
+    sendToEsp(0x0A, 0x08);   // MSG_CAL_DONE via TEXT_MSG
   else
-    sendToEspReliable(0x0E, 0xFF);   // STAT_CAL_ERR via SYS_STAT
+    sendToEsp(0x0E, 0xFF);   // STAT_CAL_ERR via SYS_STAT
 }
 
 //Main loop
@@ -967,7 +996,7 @@ void loop()
   /*
   // ── DIAGNOSE: alle 500ms Pin-Zustand loggen ──────────────────
   static uint32_t diag_last = 0;
-  if (millis() - diag_last > 5000) {
+  if (millis() - diag_last > 500) {
     diag_last = millis();
     Serial.print(F("[DIAG] PINC=0x")); Serial.print(PINC, HEX);
     Serial.print(F(" DDRC=0x")); Serial.print(DDRC, HEX);
@@ -977,7 +1006,7 @@ void loop()
     Serial.print(F(" PINB=0x")); Serial.print(PINB, HEX);
     Serial.print(F(" PINE=0x")); Serial.println(PINE, HEX);
   }
-  */
+  //*/
 
   uint8_t cmd = 0;
   uint8_t param = 0;
@@ -986,7 +1015,7 @@ void loop()
     // Physischer Taster gedrückt
     Serial.println(F("[LOOP] Testbutton is pressed"));
     cmd = 0x1;  // START_TEST
-  } else if (!(BB_RD_PIN & (1 << BB_RD_BIT))) {
+  } else if (!(BB_HANDSHAKE_PIN & (1 << BB_RD_BIT))) {
     Serial.println(F("[LOOP] Received data from Brutzelboy"));
     checkBrutzelBoyCommand(cmd, param);
   }
@@ -3454,9 +3483,9 @@ void DisplayValue(unsigned long Value, signed char Exponent, unsigned char Unit)
 
     uint8_t valID = 0x02 + (ValueCounter * 2);    // VAL1_LO=0x02, VAL2_LO=0x04, ...
     if (valID <= 0x08) {
-      sendToEspReliable(0x0B, (protocolPrefix & 0x0F) | (busOffset << 4)); // UNIT_SCALE
-      sendToEspReliable(valID,     (uint8_t)(busVal & 0xFF));              // LO
-      sendToEspReliable(valID + 1, (uint8_t)((busVal >> 8) & 0xFF));       // HI
+      sendToEsp(0x0B, (protocolPrefix & 0x0F) | (busOffset << 4)); // UNIT_SCALE
+      sendToEsp(valID,     (uint8_t)(busVal & 0xFF));              // LO
+      sendToEsp(valID + 1, (uint8_t)((busVal >> 8) & 0xFF));       // HI
       ValueCounter++;
     }
   }
@@ -3552,9 +3581,9 @@ void ShortCircuit(byte Mode)
     lcd_fixed_string(ShortCircuit_str);          //Display: short circuit!
     // BrutzelBoy informieren
     if (Mode == 0)
-      sendToEspReliable(0x0A, 0x07);            // MSG_SHORT_REMOVE
+      sendToEsp(0x0A, 0x07);            // MSG_SHORT_REMOVE
     else
-      sendToEspReliable(0x0A, 0x06);            // MSG_SHORT_CREATE
+      sendToEsp(0x0A, 0x06);            // MSG_SHORT_CREATE
     Run = 1;                                     //Enter loop
   }
   //Wait until all probes are dis/connected
@@ -4301,7 +4330,7 @@ byte SelfAdjust(void)
   unsigned int                U_RiH = 0;         //Sum of U_RiL values 
   unsigned long               Val0;              //Temp. value 
   //Measurements
-  sendToEspReliable(0x0A, 0x06);               // MSG_SHORT_CREATE — immer anzeigen
+  sendToEsp(0x0A, 0x06);               // MSG_SHORT_CREATE — immer anzeigen
   ShortCircuit(1);                               //Make sure all probes are shorted 
   while (Test <= 5)
   {
@@ -4505,7 +4534,7 @@ byte SelfAdjust(void)
     }
   }
   //Show values and offsets
-  sendToEspReliable(0x0A, 0x07);               // MSG_SHORT_REMOVE — immer anzeigen
+  sendToEsp(0x0A, 0x07);               // MSG_SHORT_REMOVE — immer anzeigen
   Serial.println(F("[CAL] Done"));
   if (Flag == 4) Flag = 1;                       //All adjustments done -> success
   else Flag = 0;                                 //Signal error

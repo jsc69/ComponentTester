@@ -138,6 +138,8 @@ static const char* TAG_RAW = "RAW";    // Rohdaten (verbose)
 #define C_PASSIVE 0xFFFF  // Weiß
 #define C_DKGREY  0x2104
 
+#define TIMEOUT  50000    // Timeout for bus communication
+
 // ════════════════════════════════════════════════════════════════
 //  ZUSTANDSMASCHINE
 // ════════════════════════════════════════════════════════════════
@@ -221,15 +223,57 @@ void finishCommunication() {
   ESP_LOGV(TAG_RAW, "RD=HIGH gesetzt");
 }
 
-bool waitForBusIdle() {
-  ESP_LOGI(TAG_BB, "Warte auf Bus-Idle...");
-  uint32_t deadline = millis() + 3000;
+bool waitForATmegaAck() {
+  uint32_t loop_count = 0;
+  uint32_t deadline = millis() + TIMEOUT;
   while (millis() < deadline) {
     uint8_t p1;
     cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &p1);
-    if ((p1 & BIT_MASK_WR) && (p1 & BIT_MASK_RD)) return true;  // WR=HIGH, RD=HIGH = idle
-    delay(10);
+    if (p1 & BIT_MASK_WR) {
+      ESP_LOGV(TAG_RAW, "WR=HIGH erkannt nach %lu Iterationen", loop_count);
+      return true;
+    }
+    if (++loop_count % 1000 == 0)
+      ESP_LOGV(TAG_RAW, "warte auf WR=HIGH, count=%lu", loop_count);
+    delayMicroseconds(200);
   }
+  ESP_LOGW(TAG_RAW, "<TIMEOUT> WR=HIGH nicht erkannt nach %lu Iterationen", loop_count);
+  return false;
+}
+
+bool waitForATmegaReady() {
+  uint32_t loop_count = 0;
+  uint32_t deadline = millis() + TIMEOUT;
+  while (millis() < deadline) {
+    uint8_t p1;
+    cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &p1);
+    if (!(p1 & BIT_MASK_WR)) {
+      ESP_LOGV(TAG_RAW, "WR=LOW erkannt nach %lu Iterationen", loop_count);
+      return true;
+    }
+    if (++loop_count % 1000 == 0)
+      ESP_LOGV(TAG_RAW, "warte auf WR=LOW, count=%lu", loop_count);
+    delayMicroseconds(200);
+  }
+  ESP_LOGW(TAG_RAW, "<TIMEOUT> WR=LOW nicht erkannt nach %lu Iterationen", loop_count);
+  return false;
+}
+
+bool waitForBusIdle() {
+  uint32_t loop_count = 0;
+  uint32_t deadline = millis() + TIMEOUT;
+  while (millis() < deadline) {
+    uint8_t p1;
+    cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &p1);
+    if ((p1 & BIT_MASK_WR) && (p1 & BIT_MASK_RD)) {
+      ESP_LOGV(TAG_RAW, "BUS_IDLE erkannt nach %lu Iterationen", loop_count);
+      return true;  // WR=HIGH, RD=HIGH = idle
+    }
+    if (++loop_count % 1000 == 0)
+      ESP_LOGV(TAG_RAW, "warte auf BUS_IDLE, count=%lu", loop_count);
+    delayMicroseconds(200);
+  }
+  ESP_LOGW(TAG_RAW, "<TIMEOUT> BUS_IDLE nicht erkannt nach %lu Iterationen", loop_count);
   return false;
 }
 
@@ -240,7 +284,7 @@ bool waitForBusIdle() {
 //  Stabilitätsprüfung: beide Register 2× lesen
 // ════════════════════════════════════════════════════════════════
 bool busRead(uint8_t &id_out, uint8_t &data_out) {
-  uint8_t u1a, u1b, u2a, u2b, u2p;
+  uint8_t u1, u2, u2p;
 
   if (!isDataPending()) {
     id_out = 0x0F; data_out = 0xFF;
@@ -252,43 +296,22 @@ bool busRead(uint8_t &id_out, uint8_t &data_out) {
   setAck();
 
   // Schritt 6: warten auf WR=HIGH ("Daten gültig")
-  uint32_t loop_count = 0;
-  while (true) {
-    uint8_t p1;
-    cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &p1);
-    if (p1 & BIT_MASK_WR) break;
-    if (++loop_count % 1000 == 0)
-      ESP_LOGV(TAG_RAW, "warte auf WR=HIGH, count=%lu", loop_count);
-    delayMicroseconds(100);
-  }
-  ESP_LOGV(TAG_RAW, "WR=HIGH erkannt nach %lu Iterationen", loop_count);
+  waitForATmegaAck();
 
   // Schritt 7: Bus lesen
-  if (cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P0, &u1a) != CARTRIDGE_OK ||
-      cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P0, &u2a) != CARTRIDGE_OK ||
-      cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P0, &u1b) != CARTRIDGE_OK ||
-      cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P0, &u2b) != CARTRIDGE_OK) {
+  if (cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P0, &u1) != CARTRIDGE_OK ||
+      cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P0, &u2) != CARTRIDGE_OK) {
     finishCommunication();
     id_out = 0x0F; data_out = 0xFF;
+    ESP_LOGE(TAG_BUS, "Error reading bus!");
     return false;
   }
 
-  bool stable = ((u1a & 0x0F) == (u1b & 0x0F)) && (u2a == u2b);
-  if (!stable) {
-    finishCommunication(); 
-    id_out = 0x0F; 
-    data_out = 0xFF; 
-    return false; 
-    }
-
-  id_out   = u1a & 0x0F;
-  data_out = u2a;
+  id_out   = u1 & 0x0F;
+  data_out = u2;
 
   // Schritt 8: RD=HIGH (idle)
   finishCommunication();
-
-  if (id_out == 0x0F) return false;
-
   return true;
 }
 
@@ -299,22 +322,13 @@ bool busRead(uint8_t &id_out, uint8_t &data_out) {
 // ════════════════════════════════════════════════════════════════
 bool sendCommand(uint8_t cmd, uint8_t param) {
   if (!bb.isCartridgeReady()) return false;
+  if (!waitForBusIdle()) return false;
 
   // Schritt 1: RD=LOW — "Kommando kommt"
   setDataPending();
 
   // Schritt 2: Warten auf WR=LOW
-  uint32_t deadline = millis() + 200;
-  bool wr_low_seen = false;
-  while (millis() < deadline) {
-    uint8_t p1;
-    cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &p1);
-    if (!(p1 & BIT_MASK_WR)) { wr_low_seen = true; break; }
-    delayMicroseconds(200);
-  }
-  if (!wr_low_seen) {
-    ESP_LOGW(TAG_CMD, "CMD 0x%X: kein WR=LOW vom ATmega", cmd);
-    finishCommunication();
+  if (waitForATmegaReady()) {
     return false;
   }
 
@@ -328,13 +342,7 @@ bool sendCommand(uint8_t cmd, uint8_t param) {
   finishCommunication();
 
   // Schritt 5: Warten auf WR=HIGH vom ATmega ("gelesen")
-  deadline = millis() + 200;
-  while (millis() < deadline) {
-    uint8_t p1;
-    cartridge_read_reg(CARTRIDGE_ADDR_U2, AW9523_REG_INPUT_P1, &p1);
-    if (p1 & BIT_MASK_WR) break;  // WR=HIGH erkannt
-    delayMicroseconds(200);
-  }
+  if (!waitForATmegaAck()) return false;
 
   // Bus freigeben
   cartridge_write_reg(CARTRIDGE_ADDR_U1, AW9523_REG_DIR_P0, 0xFF);
@@ -1030,6 +1038,7 @@ void setup() {
 
   setState(STATE_WELCOME);
   displayWelcome();
+  delay(5000); // wait for ArduTester
   waitForBusIdle();
   ESP_LOGI(TAG_BB, "Bereit");
 }
@@ -1043,7 +1052,7 @@ void loop() {
   /*
   // ── DIAGNOSE: alle 500ms Bus-Zustand loggen ──────────────────
   static uint32_t diag_last = 0;
-  if (millis() - diag_last > 5000) {
+  if (millis() - diag_last > 500) {
     diag_last = millis();
     uint8_t u1p0, u1p1, u2p0, u2p1;
     cartridge_read_reg(CARTRIDGE_ADDR_U1, AW9523_REG_INPUT_P0, &u1p0);
@@ -1056,7 +1065,7 @@ void loop() {
       (u2p1 & BIT_MASK_WR) ? 1 : 0,
       (u2p1 & BIT_MASK_RD) ? 1 : 0);
   }
-  */
+  //*/
 
   handleButtons();
 
