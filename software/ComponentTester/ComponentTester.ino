@@ -72,15 +72,16 @@ static const char* TAG_RAW = "RAW";    // Rohdaten (verbose)
 #define TYPE_TRIAC        0x0B
 
 // TEXT_MSG-Codes
-#define MSG_NO_PART      0x01
-#define MSG_TESTING      0x02
-#define MSG_OVERLOAD     0x03
-#define MSG_PROBING      0x04
-#define MSG_SHORT        0x05
-#define MSG_SHORT_CREATE 0x06   // "Testpins kurzschließen"
-#define MSG_SHORT_REMOVE 0x07   // "Kurzschluss entfernen"
+// TEXT_MSG-Codes (0xA) — was der ArduTester tatsächlich sendet
+#define MSG_NO_PART      0x01   // Kein Bauteil / Entladefehler
+#define MSG_SHORT        0x02   // Kurzschluss auf allen Pins
+// 0x03 nicht verwendet
+#define MSG_PROBING      0x04   // Messung läuft (kommt nach STAT_BUSY)
+// 0x05 nicht verwendet
+#define MSG_SHORT_CREATE 0x06   // "Testpins kurzschließen" (Kalibrierung)
+#define MSG_SHORT_REMOVE 0x07   // "Kurzschluss entfernen" (Kalibrierung)
 #define MSG_CAL_DONE     0x08   // Kalibrierung erfolgreich
-#define MSG_CAL_COMP     0x09   // CompOffset-Wert folgt (nicht als Display-MSG)
+#define MSG_CAL_COMP     0x09   // CompOffset-Datenwert (kein Text, interner Wert)
 
 // SYS_STAT-Codes
 #define STAT_IDLE    0x00
@@ -108,6 +109,7 @@ static const char* TAG_RAW = "RAW";    // Rohdaten (verbose)
 #define CMD_SELF_TEST   0x6
 #define CMD_POWER_OFF   0x7
 #define CMD_CALIBRATE   0x8
+#define CMD_DEFAULT_PAR 0x9
 
 // ════════════════════════════════════════════════════════════════
 //  DISPLAY-LAYOUT  (Landscape, SCREEN_WIDTH×SCREEN_HEIGHT aus display.h)
@@ -430,10 +432,23 @@ void handleButtons() {
     }
   }
 
-  // Stubs für später:
-  if (changed & (1 << INPUT_B))      { ESP_LOGI(TAG_BTN, "B (STUB)");      /* TODO: sendCommand(CMD_CALIBRATE, 0x01); */ }
+  // Button B: Kalibrierung starten
+  if (changed & (1 << INPUT_B)) {
+    if (g_state == STATE_IDLE || g_state == STATE_RESULT || g_state == STATE_WELCOME) {
+      ESP_LOGI(TAG_BTN, "B → CMD_CALIBRATE");
+      sendCommand(CMD_CALIBRATE, 0x01);
+    }
+  }
+
+  // Button START: Kalibrierungswerte zurücksetzen (DefaultPar)
+  if (changed & (1 << INPUT_START)) {
+    if (g_state == STATE_IDLE || g_state == STATE_RESULT || g_state == STATE_WELCOME) {
+      ESP_LOGI(TAG_BTN, "START → CMD_DEFAULT_PAR");
+      sendCommand(CMD_DEFAULT_PAR, 0x01);
+    }
+  }
+
   if (changed & (1 << INPUT_SELECT)) { ESP_LOGI(TAG_BTN, "SELECT (STUB)"); /* TODO */ }
-  if (changed & (1 << INPUT_START))  { ESP_LOGI(TAG_BTN, "START (STUB)");  /* TODO */ }
   if (changed & (1 << INPUT_MENU))   { ESP_LOGI(TAG_BTN, "MENU (STUB)");   /* TODO */ }
   if (changed & (1 << INPUT_OPTION)) { ESP_LOGI(TAG_BTN, "OPTION (STUB)"); /* TODO */ }
 }

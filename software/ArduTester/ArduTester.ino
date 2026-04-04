@@ -954,6 +954,12 @@ void pwmGenerator(int8_t param) {
 
 void startCalibration(uint8_t param) {
   Serial.println(F("[CMD] CALIBRATE"));
+  // Bandgap-Referenz messen — wird von SmallCap() für die Berechnung benötigt
+  Config.U_Bandgap = ReadU(0x0e);
+  Config.Samples = 200;
+  Config.U_Bandgap = ReadU(0x0e);
+  Config.Samples = ADC_SAMPLES;
+  Config.U_Bandgap += Config.RefOffset;
   sendToEsp(0x0E, 0x03);               // STAT_CAL
   byte calResult = SelfAdjust();
   if (calResult) SaveEEP();
@@ -1050,6 +1056,11 @@ void loop()
 
     case 0x8:  // CALIBRATE - SelfAdjust + SaveEEP
       startCalibration(param);
+      break;
+
+    case 0x9:  // DEFAULT_PAR - Kalibrierungswerte zurücksetzen
+      Serial.println(F("[CMD] DEFAULT_PAR"));
+      DefaultPar();
       break;
 
     default:

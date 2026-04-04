@@ -121,17 +121,16 @@
 | 0x8  | 1000 | VAL4_LO    | 0x00..0xFF| %         | Zusatzwert (Iceo, Ir) - LOW Byte      |
 | 0x9  | 1001 | VAL4_HI    | 0x00..0xFF| %         | Zusatzwert (Iceo, Ir) - HIGH Byte     |
 +------+------+------------+-----------+-----------+---------------------------------------+
-| 0xA  | 1010 | TEXT_MSG   | 0x01      | 00000001  | MSG: "No part found"                  |
-| 0xA  | 1010 | TEXT_MSG   | 0x02      | 00000010  | MSG: "Short Circuit!"                 |
-| 0xA  | 1010 | TEXT_MSG   | 0x03      | 00000011  | MSG: "Remove Short!"                  |
-| 0xA  | 1010 | TEXT_MSG   | 0x04      | 00000100  | MSG: "Testing..."                     |
-| 0xA  | 1010 | TEXT_MSG   | 0x05      | 00000101  | MSG: "Cell!" (Voltage source)         |
-| 0xA  | 1010 | TEXT_MSG   | 0x06      | 00000110  | MSG: "Probing..."                     |
-| 0xA  | 1010 | TEXT_MSG   | 0x07      | 00000111  | MSG: "Calibration required"           |
-| 0xA  | 1010 | TEXT_MSG   | 0x08      | 00001000  | MSG: "Timeout!"                       |
-| 0xA  | 1010 | TEXT_MSG   | 0x0F      | 00001111  | MSG: ???                              |
-| 0xA  | 1010 | TEXT_MSG   | 0x1F      | 00011111  | MSG: ???                              |
-| 0xA  | 1010 | TEXT_MSG   | 0x3F      | 00111111  | MSG: ???                              |
+| 0xA  | 1010 | TEXT_MSG   | 0x01      | 00000001  | MSG_NO_PART:      Kein Bauteil        |
+| 0xA  | 1010 | TEXT_MSG   | 0x02      | 00000010  | MSG_SHORT:        Kurzschluss         |
+| 0xA  | 1010 | TEXT_MSG   | 0x03      | 00000011  | (nicht verwendet)                     |
+| 0xA  | 1010 | TEXT_MSG   | 0x04      | 00000100  | MSG_PROBING:      Messung lauft       |
+| 0xA  | 1010 | TEXT_MSG   | 0x05      | 00000101  | (nicht verwendet)                     |
+| 0xA  | 1010 | TEXT_MSG   | 0x06      | 00000110  | MSG_SHORT_CREATE: Pins kurzschl.(Kal) |
+| 0xA  | 1010 | TEXT_MSG   | 0x07      | 00000111  | MSG_SHORT_REMOVE: Kurzschl.entf.(Kal) |
+| 0xA  | 1010 | TEXT_MSG   | 0x08      | 00001000  | MSG_CAL_DONE:     Kalibrierung OK     |
+| 0xA  | 1010 | TEXT_MSG   | 0x09      | 00001001  | MSG_CAL_COMP:     CompOffset (intern) |
+| 0xA  | 1010 | TEXT_MSG   | 0x0A+     | ........  | MSG_CAL_DATA:     Kalib.daten (+128)  |
 +------+------+------------+-----------+-----------+---------------------------------------+
 | 0xB  | 1011 | UNIT_SCALE | 0x00      | ....0000  | UNIT: None / Plain Number             |
 | 0xB  | 1011 | UNIT_SCALE | 0x01      | ....0001  | UNIT: p (pico)                        |
@@ -161,7 +160,7 @@
 | ID   | ID   | Funktion       | Daten(D7-D0)| Bedeutung / Parameter                     |
 | (Hex)| (Bin)| (A3-A0)        | (Dec/Hex)   |                                           |
 +------+------+----------------+-------------+-------------------------------------------+
-| 0x1  | 0001 | START_TEST     | 0x01        | Startet Standard-Bauteilprüfung           |
+| 0x1  | 0001 | START_TEST     | 0x01        | Startet Standard-Bauteilpruefung          |
 +------+------+----------------+-------------+-------------------------------------------+
 | 0x2  | 0010 | FREQ_METER     | 0x01        | Startet Frequenzmessung                   |
 +------+------+----------------+-------------+-------------------------------------------+
@@ -193,6 +192,10 @@
 | 0x6  | 0110 | SELF_TEST      | 0x01        | Startet Kalibrierung / Selbsttest         |
 +------+------+----------------+-------------+-------------------------------------------+
 | 0x7  | 0111 | POWER_OFF      | 0x01        | Schaltet ArduTester aus (Standby)         |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x8  | 1000 | CALIBRATE      | 0x01        | Startet Kalibrierung (SelfAdjust)         |
++------+------+----------------+-------------+-------------------------------------------+
+| 0x9  | 1001 | DEFAULT_PAR    | 0x01        | Setzt Kalibrierungswerte auf Standard     |
 +------+------+----------------+-------------+-------------------------------------------+
 
 Connections:
